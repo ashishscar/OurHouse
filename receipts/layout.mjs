@@ -46,7 +46,7 @@ export function receiptLines(pages){
 
 // Overlap is reconciled between adjacent sections only, never by product name.
 export function mergeTranscriptions(pages){
- const result=[];let uncertain=false,previous=null;
+ const result=[];let uncertain=false,conflicts=false,previous=null;
  const key=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
  for(const page of pages){const lines=page.lines||[],candidates=[];let overlap=0,max=18;
   if(previous?.section&&page.section){const shared=previous.section.top+previous.section.height-page.section.top;max=Math.max(1,Math.ceil(previous.lines.length*Math.max(0,shared)/previous.section.height)+1);}
@@ -65,8 +65,28 @@ export function mergeTranscriptions(pages){
     if(new Set(anchors).size>=2){let offset=0,found=true;const text=lines.join('\n');for(const row of right.slice(0,n)){const at=text.indexOf(row.raw,offset);if(at<0){found=false;break;}offset=at+row.raw.length;}if(found)overlap=text.slice(0,offset).split('\n').length;}
    }
   }
+  // A partially read last product or a disagreeing amount must not prevent
+  // matching the other complete products at this physical boundary. Require
+  // two different name+amount anchors and one unambiguous alignment. Repeated
+  // identical products alone cannot establish a safe boundary.
+  if(result.length&&!overlap){
+   const left=parseReceipt(result.join('\n')),right=parseReceipt(lines.join('\n')),matches=[];
+   const productKey=row=>key(row.name.replace(/\bH?MRJ\b/gi,'').replace(/\b\d{3,14}\b/g,''));
+   // Physical line density is only an estimate: wrapped rates and a clipped
+   // product can shift it by two products. Keep that allowance at the boundary.
+   const boundaryMax=Math.min(18,max+2);
+   for(let start=Math.max(0,left.length-boundaryMax);start<left.length;start++){
+    let n=0;const anchors=new Set();
+    while(start+n<left.length&&n<Math.min(boundaryMax,right.length)&&productKey(left[start+n])===productKey(right[n])){if(left[start+n].amount===right[n].amount)anchors.add(productKey(right[n])+':'+right[n].amount);n++;}
+    if(n>=2&&anchors.size>=2&&left.length-start-n<=2)matches.push({start,n});
+   }
+   if(matches.length===1){const {start,n}=matches[0],text=lines.join('\n');let offset=0,found=true;
+    for(const row of right.slice(0,n)){const at=text.indexOf(row.raw,offset);if(at<0){found=false;break;}offset=at+row.raw.length;}
+    if(found){overlap=text.slice(0,offset).split('\n').length;for(let i=0;i<n;i++){const a=left[start+i],b=right[i];if(a.amount!==b.amount||a.quantityKnown&&b.quantityKnown&&(a.qty!==b.qty||a.unit!==b.unit))conflicts=true;}uncertain=uncertain||conflicts;}
+   }
+  }
   if(result.length&&!overlap&&parseReceipt(result.join('\n')).length&&parseReceipt(lines.join('\n')).length)uncertain=true;
   result.push(...lines.slice(overlap));previous=page;
  }
- return {lines:result,uncertain};
+ return {lines:result,uncertain,conflicts};
 }

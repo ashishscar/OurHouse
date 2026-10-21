@@ -72,3 +72,8 @@ test('tax codes and each-price rows stay metadata, and sale notices never become
  assert.equal(rows[2].name,'SHOPPING BAG');
  assert.equal(rows[2].amount,'0.35');
 });
+
+test('a printed per-one-unit rate does not discard the actual purchased weight',()=>{
+ const rows=parseReceipt('PAPAYA(LB) $8.12\n3.26 lb @ $2.49 per 1 lb\nGINGER $2.79\n1 kg @ $2.79 per 1 kg');
+ assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
+});

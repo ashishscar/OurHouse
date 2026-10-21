@@ -80,7 +80,18 @@ test('streamed label strings do not inflate the line progress count',async()=>{
  const stream=new ReadableStream({start(c){c.enqueue(encoder.encode(raw));c.close();}});await receiptStream(stream,n=>progress.push(n));assert.deepEqual(progress,[2]);
 });
 
+test('a named product section without line totals requests fallback instead of silently losing every product',async()=>{
+ const {store,env}=setup();env.RECEIPT_AI.run=async()=>({response:JSON.stringify({lines:['BRANDX RICE 1KG','3 @ $2.00','BRANDX TEA 100G'],labels:[{line:0,shortName:'Rice',section:'pantry'},{line:2,shortName:'Tea',section:'pantry'}]})});
+ await assert.rejects(()=>readReceiptSection(store,'synthetic-user',env,{...body,productLabels:true}),e=>e.code==='AI_UNAVAILABLE');
+});
+
 test('overlap aligns misplaced numeric item identifiers without merging repeated purchases elsewhere',()=>{
  const result=mergeTranscriptions([{section:{top:0,height:1000},lines:['RICE $2.00','4123 ROMA TOMATO MRJ $4.00','5123 GREEN PEPPER MRJ $3.00']},{section:{top:800,height:1000},lines:['ROMA TOMATO MRJ 4123 $4.00','GREEN PEPPER MRJ 5123 $3.00','RICE $2.00','TOTAL $11.00']}]);
  assert.equal(result.uncertain,false);const rows=parseReceipt(result.lines.join('\n'));assert.equal(rows.length,4);assert.equal(rows.filter(r=>r.name==='RICE').length,2);
+});
+
+test('boundary anchors keep a read product once when a neighbouring amount disagrees, without changing either amount',()=>{
+ const pages=[{section:{top:0,height:1000},lines:['RICE $4.00','CHILLI $2.00','CRACKERS 400G $5.00','GINGER $3.00','BISCUITS $4.00','SALTY CRACKERS $2.00']},{section:{top:700,height:1000},lines:['CHILLI $2.00','CRACKERS 400G $5.00','GINGER $4.00','BISCUITS $2.00','OTHER SNACK $6.00','TOTAL $26.00']}];
+ const merged=mergeTranscriptions(pages),rows=parseReceipt(merged.lines.join('\n'));assert.equal(rows.length,7);assert.equal(rows.filter(r=>r.name==='CHILLI').length,1);assert.equal(rows.find(r=>r.name==='GINGER').amount,'3.00');assert.equal(merged.conflicts,true);assert.equal(merged.uncertain,true);
+ const repeated=mergeTranscriptions([{section:{top:0,height:1000},lines:['MILK $2.00','MILK $2.00','MILK $2.00']},{section:{top:800,height:1000},lines:['MILK $2.00','MILK $2.00','TOTAL $10.00']}]);assert.equal(repeated.uncertain,true);
 });

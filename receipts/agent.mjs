@@ -1,6 +1,7 @@
 import {receiptStream} from './stream.mjs';
 import {AppError} from '../lib/domain.mjs';
 import {digest} from '../lib/cloud-store.mjs';
+import {parseReceipt} from './parser.mjs';
 export const RECEIPT_MODEL='@cf/google/gemma-4-26b-a4b-it';
 export const RECEIPT_CONSENT='cloudflare-receipt-ai-v1';
 const schema={type:'object',properties:{lines:{type:'array',maxItems:180,items:{type:'string',maxLength:180}}},required:['lines'],additionalProperties:false};
@@ -44,6 +45,10 @@ export async function readReceiptSection(store,user,env,body){
    return validateTranscription(candidate?.message?.content??output.response??output);
   })();
   const result=await Promise.race([inference,new Promise((_,reject)=>timer=setTimeout(()=>reject(Error('TIMEOUT')),40000))]);
+  // A model can return valid JSON containing names/rates but omit every line
+  // total. Do not silently accept an empty product section as a successful read;
+  // the client keeps other AI sections and reads this one on-device.
+  if(body.productLabels===true&&result.labels?.length>=2&&!parseReceipt(result.lines.join('\n')).length)throw Error('MISSING_PRICES');
   const after=await store.membership(user);if(after.house!==membership.house||!['admin','editor'].includes(after.role))throw new AppError('Your family access changed. Scan again.',409,'STALE_CONTEXT');
   return {...result,engine:'cloudflare-receipt-ai',model:RECEIPT_MODEL};
  }catch(e){if(e instanceof AppError)throw e;throw new AppError('Receipt AI could not finish this section. Use on-device reading or try again.',503,'AI_UNAVAILABLE');}
