@@ -43,3 +43,26 @@ test('streamed receipt inference emits bounded progress then one validated resul
  assert.equal(await receiptStream(stream,n=>progress.push(n)),'{"lines":["TOFU 2.00","TOTAL 2.00"]}');assert.equal(progress.at(-1),2);
  const {state,store,env}=setup();env.RECEIPT_AI.run=async()=>new ReadableStream({start(c){c.enqueue(encoder.encode(raw));c.close();}});const response=await readReceiptSection(store,'synthetic-user',env,{...body,stream:true});const records=(await response.text()).trim().split('\n').map(JSON.parse);assert.equal(records[0].type,'progress');assert.equal(records.at(-1).type,'result');assert.equal(records.at(-1).lines.length,2);assert.ok(!records.some(r=>JSON.stringify(r).includes('INTERNAL_REASONING')));assert.equal(state.calls.length,2);
 });
+
+test('retail continuations preserve repeated weights, split pack sizes, short SKUs and net discount reconciliation',()=>{
+ const text='27-PRODUCE\n(2)123456 APPLES MRJ\n1.100 kg @ $2.00/kg 2.20\n1.250 kg @ $2.00/kg 2.50\n456 FROZEN VEGETABLES\n400GM\n2 @ $3.00 $6.00\n654321 SALT3X1KG 4.00\n123456789 / 654321 1.50- H\nRegular price: $5.50\nSUB-TOTAL 13.20\nHST $0.52\nTOTAL 13.72\nShop Card 13.72\nCT Money 0.19\nChange -$1.00\nNumber of Items: 5';
+ const rows=parseReceipt(text);assert.equal(rows.length,4);assert.equal(rows[0].name,'APPLES');assert.equal(rows[0].qty,1.1);assert.equal(rows[1].qty,1.25);assert.equal(rows[1].amount,'2.50');assert.equal(rows[2].qty,800);assert.equal(rows[2].itemNumber,'456');assert.equal(rows[3].qty,3);assert.equal(rows[3].packCount,1);const audit=auditReceipt(text,rows);assert.equal(audit.discounts,'1.50');assert.equal(audit.netSum,'13.20');assert.equal(audit.productCount,5);assert.deepEqual(audit.warnings,[]);
+ assert.equal(parseReceipt('FLOUR $*12.00')[0].amount,'12.00');
+});
+test('overlapping AI sections align reflowed totals and one-character OCR variations without global deduplication',()=>{
+ const merged=mergeTranscriptions([{section:{top:0,height:500},lines:['RICE $2.00','TOFU 250g $4.00','2 @ $2.00','LONG PRODUCT NAME $6.00','3 @ $2.00']},{section:{top:360,height:500},lines:['TOFU 250g','2 @ $2.00 $4.00','LONG PRODUCT NOME','3 @ $2.00 $6.00','RICE $2.00','TOTAL $14.00']}]);
+ assert.equal(merged.uncertain,false);const rows=parseReceipt(merged.lines.join('\n'));assert.equal(rows.length,4);assert.deepEqual(rows.map(r=>r.qty),[1,500,3,1]);assert.equal(rows.filter(r=>r.name==='RICE').length,2);assert.deepEqual(auditReceipt(merged.lines.join('\n'),rows).warnings,[]);
+});
+test('bounded AI sections retain the complete frame with bounded overlap and conservative paper detection',async()=>{
+ const {receiptPaperBounds}=await import('../receipts/layout.mjs');const plan=sectionPlan(720,3200,{ai:true});assert.equal(plan.sections.length,3);assert.equal(plan.sections[0].height,1400);assert.equal(plan.sections.at(-1).top+plan.sections.at(-1).height,plan.height);
+ const width=256,height=256,data=new Uint8ClampedArray(width*height*4);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4,v=x>=60&&x<200?220:30;data[i]=data[i+1]=data[i+2]=v;data[i+3]=255;}
+ const bound=receiptPaperBounds({data,width,height});assert.ok(bound.left<60&&bound.left+bound.width>200);assert.ok(bound.width<width);data.fill(220);assert.equal(receiptPaperBounds({data,width,height}),null);
+});
+
+test('compact product-aligned transcription preserves pack totals and discount-bearing quantity rows',()=>{
+ const rows=parseReceipt('12345 TOFU 250G 2 @ $2.00 $4.00\n4011 BANANAS 1.200 kg @ $2.00/kg $2.40\nRICE 1KG $12.00\n3 @ $4.00 -$1.50\n2 FOR $7.00\nSUB-TOTAL $16.90\nTOTAL $16.90');assert.equal(rows.length,3);assert.equal(rows[0].qty,500);assert.equal(rows[0].packCount,2);assert.equal(rows[1].qty,1.2);assert.equal(rows[2].qty,3);assert.deepEqual(auditReceipt('12345 TOFU 250G 2 @ $2.00 $4.00\n4011 BANANAS 1.200 kg @ $2.00/kg $2.40\nRICE 1KG $12.00\n3 @ $4.00 -$1.50\nSUB-TOTAL $16.90\nTOTAL $16.90',rows).warnings,[]);
+});
+
+test('wrong quantity/price association is flagged rather than silently trusted',()=>{
+ const wrong=parseReceipt('TOFU 250g $8.00\n3 @ $2.00\nTOTAL $8.00');assert.match(wrong[0].warning,/does not match/);assert.ok(auditReceipt('TOTAL $8.00',wrong).warnings.some(s=>s.includes('flagged')));const correct=parseReceipt('TOFU 250g $6.00\n3 @ $2.00');assert.equal(correct[0].warning,undefined);
+});
