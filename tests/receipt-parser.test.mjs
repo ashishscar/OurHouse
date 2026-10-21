@@ -29,3 +29,51 @@ test('expense drafts use the line total, omit receipt metadata, and skip ambiguo
  const text='MILK 2L 5.99 F\nRICE 2 @ 3.00 6.00\nBREAD 2 1.99 3.98\nTOTAL 15.97\nCARD 15.97';
  const rows=expenseReceipt(text);assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[{name:'MILK',amount:'5.99'},{name:'RICE',amount:'6.00'}]);assert.equal(rows[1].raw,'RICE 2 @ 3.00 6.00');
 });
+
+test('wrapped product names retain the full flavour, size and leading fat qualifier',()=>{
+ const rows=parseReceipt('TEST BRAND PICKLE MASALA 250G\nSWEET\n2 @ $4.49 $8.98\nTEST BRAND SPICY VEGGIE BURGERS\n400G $4.99\n35%\nTEST BRAND WHIPPING CREAM $8.99\nTOTAL $22.96');
+ assert.equal(rows.length,3);
+ assert.equal(rows[0].name,'TEST BRAND PICKLE MASALA SWEET');
+ assert.equal(rows[0].qty,500);
+ assert.equal(rows[0].raw,'TEST BRAND PICKLE MASALA 250G\nSWEET\n2 @ $4.49 $8.98');
+ assert.equal(rows[1].name,'TEST BRAND SPICY VEGGIE BURGERS');
+ assert.equal(rows[1].qty,400);
+ assert.equal(rows[2].name,'35% TEST BRAND WHIPPING CREAM');
+});
+
+test('a leading count belongs to the next product only when its printed amount supports it',()=>{
+ const rows=parseReceipt('TEST BRAND CHEESE $13.99\n5 @ $5.99\nTEST BRAND SOUR CREAM $29.95\nTOTAL $43.94');
+ assert.equal(rows.length,2);
+ assert.equal(rows[0].qty,1);
+ assert.equal(rows[0].amount,'13.99');
+ assert.equal(rows[0].warning,undefined);
+ assert.equal(rows[1].qty,5);
+ assert.equal(rows[1].quantityKnown,true);
+ assert.equal(rows[1].amount,'29.95');
+ assert.equal(rows[1].raw,'5 @ $5.99\nTEST BRAND SOUR CREAM $29.95');
+ assert.equal(rows[1].warning,undefined);
+ const uncertain=parseReceipt('TEST BRAND CHEESE $13.99\n5 @ $5.99\nTEST BRAND SOUR CREAM $28.95');
+ assert.ok(uncertain[0].warning);
+ assert.equal(uncertain[0].qty,1);
+ assert.equal(uncertain[1].qty,1);
+ const first=parseReceipt('5 @ $5.99\nTEST BRAND SOUR CREAM $29.95');
+ assert.equal(first[0].qty,5);
+ assert.equal(first[0].amount,'29.95');
+});
+
+test('tax codes and each-price rows stay metadata, and sale notices never become stock',()=>{
+ const rows=parseReceipt('TEST BRAND SNACK 200G\n13 @ $1.69ea. $21.97 Tx1\nTEST BRAND MILK $3.59\nFinal Sale $3.59\nSHOPPING BAG $0.35 TX1\nSUB TOTAL\nDUPLICATED FOOTER PRODUCT $1.00');
+ assert.equal(rows.length,3);
+ assert.equal(rows[0].name,'TEST BRAND SNACK');
+ assert.equal(rows[0].qty,2600);
+ assert.equal(rows[0].packCount,13);
+ assert.equal(rows[0].amount,'21.97');
+ assert.equal(rows[1].name,'TEST BRAND MILK');
+ assert.equal(rows[2].name,'SHOPPING BAG');
+ assert.equal(rows[2].amount,'0.35');
+});
+
+test('a printed per-one-unit rate does not discard the actual purchased weight',()=>{
+ const rows=parseReceipt('PAPAYA(LB) $8.12\n3.26 lb @ $2.49 per 1 lb\nGINGER $2.79\n1 kg @ $2.79 per 1 kg');
+ assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
+});

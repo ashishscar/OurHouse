@@ -6,7 +6,7 @@
 (()=>{const query=new URLSearchParams(location.search);if(window.OurHouseAuth||query.get('test')==='1'||query.get('legacy')==='1')return;window.OurHouseConfigRequest=fetch('/api/config',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)}).catch(()=>null);})();
 </script>
 <link rel="preload" as="script" href="/ourhouse-auth.js?v=2b8d9b6dc336" fetchpriority="high">
-<link rel="preload" as="script" href="/assets/app-core-7c4c1ba70c3ab94b.js" fetchpriority="high">
+<link rel="preload" as="script" href="/assets/app-core-dd790b030f3c4920.js" fetchpriority="high">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -28,7 +28,7 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/ourhouse-192.png">
 <link rel="stylesheet" href="/assets/app-3243e5afca76ae3d.css?v=3243e5afca76">
 <link rel="stylesheet" href="/family.css?v=795ab70cda76">
-<link rel="stylesheet" href="/liquid-glass.css?v=43be8e599354">
+<link rel="stylesheet" href="/liquid-glass.css?v=e1b26e14408b">
 <link rel="stylesheet" href="/redesign.css?v=4bced79d1b58"></head>
 <body>
 <input id="personalPhotoInput" type="file" accept="image/*" hidden onchange="handlePersonalPhotoSelection(event)">
@@ -880,7 +880,7 @@ Instructions
 <script defer src="./receipt-schema.js"></script>
 <script defer src="./expense-cache.js"></script>
 <script defer src="./expense-receipts.js"></script>
-<script defer src="/ourhouse-auth.js?v=2b8d9b6dc336"></script><script defer src="/ourhouse-app.js?v=1a22d85228ed"></script><script defer src="/ourhouse-sync.js?v=34abefcae6cc"></script><script defer src="/ourhouse-metrics.js?v=7c8c6300cd49"></script><script defer src="/ourhouse-cover.js?v=60b953b80398"></script><script defer src="/user-guide.js?v=ec95be610e9d"></script><script defer src="/ourhouse-maintenance.js?v=615fd363ef83"></script><script defer src="/ourhouse-receipts.js?v=479985f0605b"></script><script defer src="/ourhouse-test.js?v=4d9a8f257a73"></script><script defer src="/roomio-vault.js?v=b4ad60db5922"></script><script defer src="/roomio-recipes.js?v=dde72c58f99c"></script>
-<script type="application/json" id="ourhouse-feature-map">{"expenses":"/assets/expenses-7e76b0433285c066.js","water":"/assets/water-cb1f5a95f71a227f.js"}</script><script defer src="/ourhouse-features.js?v=8193bde96b31"></script><script defer src="/assets/app-core-7c4c1ba70c3ab94b.js"></script>
+<script defer src="/ourhouse-auth.js?v=2b8d9b6dc336"></script><script defer src="/ourhouse-app.js?v=1a22d85228ed"></script><script defer src="/ourhouse-sync.js?v=34abefcae6cc"></script><script defer src="/ourhouse-metrics.js?v=7c8c6300cd49"></script><script defer src="/ourhouse-cover.js?v=60b953b80398"></script><script defer src="/user-guide.js?v=ec95be610e9d"></script><script defer src="/ourhouse-maintenance.js?v=615fd363ef83"></script><script defer src="/ourhouse-receipts.js?v=3fdcc1e6c509"></script><script defer src="/ourhouse-test.js?v=4d9a8f257a73"></script><script defer src="/roomio-vault.js?v=b4ad60db5922"></script><script defer src="/roomio-recipes.js?v=dde72c58f99c"></script>
+<script type="application/json" id="ourhouse-feature-map">{"expenses":"/assets/expenses-7e76b0433285c066.js","water":"/assets/water-cb1f5a95f71a227f.js"}</script><script defer src="/ourhouse-features.js?v=8193bde96b31"></script><script defer src="/assets/app-core-dd790b030f3c4920.js"></script>
 </body>
 </html>

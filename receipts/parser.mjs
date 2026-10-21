@@ -1,13 +1,13 @@
 // Structured receipt drafts: never use a monetary amount as stock quantity.
 const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
-const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,3})?$`,'i');
+const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}\d{0,2})?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
 const noise=/^(?:(?:(?:sub[\s-]*|grand\s*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
-const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:per|/)\s*(?:${unitPattern}))?\s*$`,'i');
+const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?\s*$`,'i');
 const num=s=>Number(String(s).replace(/\s/g,'').replace(',','.'));
 const rounded=n=>Math.round(n*1e6)/1e6;
 function measured(q,u){u=u.toLowerCase();return {qty:rounded(q*(u==='lb'||u==='lbs'?0.45359237:u==='oz'?28.349523125:1)),unit:unitMap[u]||'pcs'};}
@@ -36,10 +36,23 @@ function applyRate(row,rate){
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null;
+ let pending=null,pendingDraft=null,last=null,deferredRate=null;
+ // Some tills put a count/rate immediately before the next product. Do not
+ // overwrite the previous product when its printed amount cannot match it.
+ function finishRate(next){
+  if(!deferredRate)return;
+  const {rate,line,previous}=deferredRate;
+  const matches=next&&Math.abs(Number(next.amount)-num(rate[1])*Number(amount(rate[3])))<=.03;
+  if(matches){applyRate(next,rate);next.raw=line+'\n'+next.raw;}
+  else if(previous){previous.warning='A nearby quantity × unit price does not match the printed amount. Stock was left unchanged; check the photo.';previous.unmatchedQuantity=line;}
+  deferredRate=null;
+ }
+ function add(row){finishRate(row);rows.push(row);}
  for(const line of lines){
+  if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
+  if(/^final\s+sale\b/i.test(line)){finishRate();pending=null;pendingDraft=null;last=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){pending=null;pendingDraft=null;last=null;continue;}
+  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate();pending=null;pendingDraft=null;last=null;continue;}
   const discount=discountPrice(line),positive=discount&&line.replace(/\s*-\s*[$₹£€]?\s*\d+[.,]\d{2}(?:\s*[A-Z*]{1,3})?\s*$/i,'').match(ratePattern);
   if(discount&&!positive){pending=null;pendingDraft=null;last=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
@@ -48,19 +61,22 @@ export function parseReceipt(text){
   // like a line total. Test the full line before removing the trailing price.
   const rate=body.match(ratePattern)||(!priced?.body?.match(ratePattern)?line.match(ratePattern):null);
   if(rate){
+   if(!pending&&!body.match(ratePattern)&&(!last?.amount||Math.abs(Number(last.amount)-num(rate[1])*Number(amount(rate[3])))>.03)){finishRate();deferredRate={rate,line,previous:last};continue;}
    const repeated=!pending&&last?.unitPrice&&priced&&body.match(ratePattern),row=pending?(pendingDraft||{...quantity(pending),raw:pending}):repeated?{...quantity(last.name),itemNumber:last.itemNumber,raw:last.name}:last;
-   if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+line;if(pending){if(row.amount&&validName(row.name))rows.push(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
-   if(repeated&&row?.amount&&validName(row.name))rows.push(row);
+   if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+line;if(pending){if(row.amount&&validName(row.name))add(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
+   if(repeated&&row?.amount&&validName(row.name))add(row);
    if(row?.amount){pending=null;pendingDraft=null;}continue;
   }
   if(!priced&&pending&&new RegExp('^'+measurement.source+'$','i').test(line)){pending+=' '+line;continue;}
+  if(!priced&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(line)){pending=line;pendingDraft=null;continue;}
   const q=quantity(body);
-  if(priced&&pending&&/^\d{4,14}\s/.test(pending)&&!q.itemNumber){const joined=quantity(pending+' '+body);if(validName(joined.name)){const row={...joined,amount:priced.amount,raw:pending+'\n'+line};rows.push(row);last=row;pending=null;continue;}}
-  if(priced&&!body&&pending){const row={...(pendingDraft||quantity(pending)),amount:priced.amount,raw:pending+'\n'+line};if(validName(row.name)){rows.push(row);last=row;}pending=null;continue;}
-  if(priced){pending=null;pendingDraft=null;if(validName(q.name)){const row={...q,amount:priced.amount,raw:line};rows.push(row);last=row;}else last=null;}
-  else {pendingDraft=null;pending=validName(q.name)?line:null;last=pending?null:last;}
+  if(priced&&pending&&!pendingDraft&&!q.itemNumber&&(/^\d{4,14}\s/.test(pending)||/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)||!validName(q.name))){const joined=quantity(pending+' '+body);if(validName(joined.name)){const row={...joined,amount:priced.amount,raw:pending+'\n'+line};add(row);last=row;pending=null;continue;}}
+  if(priced&&!body&&pending){const row={...(pendingDraft||quantity(pending)),amount:priced.amount,raw:pending+'\n'+line};if(validName(row.name)){add(row);last=row;}pending=null;continue;}
+  if(priced){pending=null;pendingDraft=null;if(validName(q.name)){const row={...q,amount:priced.amount,raw:line};add(row);last=row;}else last=null;}
+  else {const qualifier=/^(?:sweet|salted|unsalted|spicy|plain|original|whole|split|ground|sliced|chopped)$/i.test(line),joined=pending&&!pendingDraft&&qualifier?quantity(pending+' '+line):null;pendingDraft=null;pending=joined&&validName(joined.name)?pending+'\n'+line:validName(q.name)?line:null;last=pending?null:last;}
   if(rows.length>=500)break;
  }
+ finishRate();
  return rows.map(row=>({...row,...(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice))>.03?{warning:'The quantity × unit price does not match this product amount. Check the photo before selecting it.'}:{})}));
 }
 export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(row=>({...row,pick:false,confidence:'review'}));}
