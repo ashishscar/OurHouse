@@ -2,7 +2,7 @@ import {parseReceipt} from './parser.mjs';
 // Matching is restricted to the shared physical boundary, never the whole receipt.
 export function sectionPlan(width,height,{ai=false}={}){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<1||height<1)throw Error('This photo has invalid dimensions.');
- const scale=Math.min(ai?1:2,(ai?1400:1800)/width),w=Math.round(width*scale),h=Math.round(height*scale),size=ai?1400:1800,overlap=300,sections=[];
+ const scale=Math.min(ai?1:2,(ai?1400:1800)/width),w=Math.round(width*scale),h=Math.round(height*scale),size=ai?1200:1800,overlap=ai?240:300,sections=[];
  for(let top=0;top<h;top+=size-overlap){sections.push({left:0,top,width:w,height:Math.min(size,h-top),scale});if(top+size>=h)break;if(sections.length>=64)throw Error('This receipt is too long for one photo. Take closer photos of shorter sections.');}
  return {width:w,height:h,scale,sections};
 }
@@ -57,7 +57,8 @@ export function mergeTranscriptions(pages){
   if(result.length&&!overlap){
    const left=parseReceipt(result.join('\n')),right=parseReceipt(lines.join('\n')),matches=[];
    const near=(a,b)=>{if(a===b)return true;if(a.length<12||a.length!==b.length)return false;return [...a].filter((c,i)=>c!==b[i]).length===1;};
-   const same=(a,b)=>near(key(a.name),key(b.name))&&a.amount===b.amount&&(!a.itemNumber||!b.itemNumber||a.itemNumber===b.itemNumber)&&(!a.quantityKnown||!b.quantityKnown||a.qty===b.qty&&a.unit===b.unit);
+   const productKey=row=>key(row.name.replace(/\bH?MRJ\b/gi,'').replace(/\b\d{3,14}\b/g,''));
+   const same=(a,b)=>near(productKey(a),productKey(b))&&a.amount===b.amount&&(!a.itemNumber||!b.itemNumber||a.itemNumber===b.itemNumber)&&(!a.quantityKnown||!b.quantityKnown||a.qty===b.qty&&a.unit===b.unit);
    for(let n=Math.min(max,left.length,right.length);n>=2;n--)if(left.slice(-n).every((row,i)=>same(row,right[i])))matches.push(n);
    if(matches.length===1){
     const n=matches[0],anchors=right.slice(0,n).map(r=>key(r.name)+':'+r.amount);

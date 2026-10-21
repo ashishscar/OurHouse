@@ -54,7 +54,7 @@ test('overlapping AI sections align reflowed totals and one-character OCR variat
  assert.equal(merged.uncertain,false);const rows=parseReceipt(merged.lines.join('\n'));assert.equal(rows.length,4);assert.deepEqual(rows.map(r=>r.qty),[1,500,3,1]);assert.equal(rows.filter(r=>r.name==='RICE').length,2);assert.deepEqual(auditReceipt(merged.lines.join('\n'),rows).warnings,[]);
 });
 test('bounded AI sections retain the complete frame with bounded overlap and conservative paper detection',async()=>{
- const {receiptPaperBounds}=await import('../receipts/layout.mjs');const plan=sectionPlan(720,3200,{ai:true});assert.equal(plan.sections.length,3);assert.equal(plan.sections[0].height,1400);assert.equal(plan.sections.at(-1).top+plan.sections.at(-1).height,plan.height);
+ const {receiptPaperBounds}=await import('../receipts/layout.mjs');const plan=sectionPlan(720,3200,{ai:true});assert.equal(plan.sections.length,4);assert.ok(plan.sections.every(s=>s.height<=1200));assert.equal(plan.sections.at(-1).top+plan.sections.at(-1).height,plan.height);
  const width=256,height=256,data=new Uint8ClampedArray(width*height*4);for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4,v=x>=60&&x<200?220:30;data[i]=data[i+1]=data[i+2]=v;data[i+3]=255;}
  const bound=receiptPaperBounds({data,width,height});assert.ok(bound.left<60&&bound.left+bound.width>200);assert.ok(bound.width<width);data.fill(220);assert.equal(receiptPaperBounds({data,width,height}),null);
 });
@@ -65,4 +65,22 @@ test('compact product-aligned transcription preserves pack totals and discount-b
 
 test('wrong quantity/price association is flagged rather than silently trusted',()=>{
  const wrong=parseReceipt('TOFU 250g $8.00\n3 @ $2.00\nTOTAL $8.00');assert.match(wrong[0].warning,/does not match/);assert.ok(auditReceipt('TOTAL $8.00',wrong).warnings.some(s=>s.includes('flagged')));const correct=parseReceipt('TOFU 250g $6.00\n3 @ $2.00');assert.equal(correct[0].warning,undefined);
+});
+
+test('product labels are an opt-in, bounded annotation and cannot alter the source transcription',async()=>{
+ const {state,store,env}=setup();env.RECEIPT_AI.run=async(_model,input)=>{state.input=input;return {response:JSON.stringify({lines:['TEST BRAND RICE 2KG $4.00','TOTAL $4.00'],labels:[{line:0,shortName:'Rice',section:'pantry'}]})};};
+ const result=await readReceiptSection(store,'synthetic-user',env,{...body,productLabels:true});assert.equal(result.lines[0],'TEST BRAND RICE 2KG $4.00');assert.equal(result.labels[0].name,'Rice');assert.ok(state.input.response_format.json_schema.schema.properties.labels);assert.equal(state.input.store,false);assert.equal(state.input.tools,undefined);
+ const invalid=validateTranscription({lines:['GROCERY $2.00'],labels:[{line:3,name:'Invented',section:'pantry'},{line:0,name:'<script>',section:'pantry'},{line:0,name:'GROCERY',section:'unknown'}]});assert.deepEqual(invalid.labels,[{line:0,name:'GROCERY',section:'unknown'}]);
+});
+
+test('streamed label strings do not inflate the line progress count',async()=>{
+ const {receiptStream}=await import('../receipts/stream.mjs'),encoder=new TextEncoder(),progress=[];
+ const body=JSON.stringify({lines:['TEST BRAND RICE $2.00','TOTAL $2.00'],labels:[{line:0,name:'Rice',section:'pantry'}]});
+ const raw='data: '+JSON.stringify({choices:[{delta:{content:body},finish_reason:'stop'}]})+'\n\n';
+ const stream=new ReadableStream({start(c){c.enqueue(encoder.encode(raw));c.close();}});await receiptStream(stream,n=>progress.push(n));assert.deepEqual(progress,[2]);
+});
+
+test('overlap aligns misplaced numeric item identifiers without merging repeated purchases elsewhere',()=>{
+ const result=mergeTranscriptions([{section:{top:0,height:1000},lines:['RICE $2.00','4123 ROMA TOMATO MRJ $4.00','5123 GREEN PEPPER MRJ $3.00']},{section:{top:800,height:1000},lines:['ROMA TOMATO MRJ 4123 $4.00','GREEN PEPPER MRJ 5123 $3.00','RICE $2.00','TOTAL $11.00']}]);
+ assert.equal(result.uncertain,false);const rows=parseReceipt(result.lines.join('\n'));assert.equal(rows.length,4);assert.equal(rows.filter(r=>r.name==='RICE').length,2);
 });
