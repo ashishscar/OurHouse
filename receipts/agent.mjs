@@ -28,7 +28,7 @@ export async function readReceiptSection(store,user,env,body){
  if(body.house!==membership.house)throw new AppError('Your household changed. Scan the receipt again.',409,'STALE_CONTEXT');
  const image=validateImage(body);
  if(!env.RECEIPT_AI?.run)throw new AppError('Receipt AI is unavailable. Use on-device reading.',503,'AI_UNAVAILABLE');
- await store.rate('receipt-ai:'+user,12);
+ await store.rate('receipt-ai:'+user,24);
  await budget(store,'global',80);await budget(store,'house:'+membership.house,40);
  const run=async onProgress=>{let timer;
  try{
