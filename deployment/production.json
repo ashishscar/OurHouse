@@ -42,5 +42,8 @@
       "binding": "CARE_SERVICE",
       "service": "ourhouse-care"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "RECEIPT_AI"
+  }
 }

@@ -6,7 +6,7 @@ import {pantryReceipt} from '../receipts/parser.mjs';
 test('long warehouse receipt sections retain readable width and cover the whole photo',()=>{
  const plan=sectionPlan(1000,12000);assert.equal(plan.width,1800);assert.ok(plan.sections.length>10);
  assert.equal(plan.sections[0].top,0);assert.equal(plan.sections.at(-1).top+plan.sections.at(-1).height,plan.height);
- for(let i=1;i<plan.sections.length;i++)assert.equal(plan.sections[i-1].top+plan.sections[i-1].height-plan.sections[i].top,240);
+ for(let i=1;i<plan.sections.length;i++)assert.equal(plan.sections[i-1].top+plan.sections[i-1].height-plan.sections[i].top,300);
  assert.throws(()=>sectionPlan(1000,60000),/too long/);
 });
 

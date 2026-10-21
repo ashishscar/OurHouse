@@ -19,7 +19,7 @@ function deadline(promise,ms,signal,cleanup=()=>{}){
  });
 }
 function normalize(items){
- if(!Array.isArray(items)||items.length>200)throw fail('RESULT','Invalid receipt items');
+ if(!Array.isArray(items)||items.length>500)throw fail('RESULT','Invalid receipt items');
  return items.filter(it=>it&&typeof it.name==='string'&&!/^(?:sub\s*total|total|tax|cash|change|balance|discount|savings|payment|loyalty points)\b/i.test(it.name.trim())).map(it=>{
   const name=it.name.trim().replace(/\s+/g,' '),qty=Number(it.qty);
   if(!name||name.length>80||/[\u0000-\u001f]/.test(name)||typeof it.qty==='string'&&!/^\d+(?:\.\d{1,6})?$/.test(it.qty)||!Number.isFinite(qty)||qty<=0||qty>100000||!UNITS.includes(it.unit))throw fail('RESULT','Invalid product quantity or unit');

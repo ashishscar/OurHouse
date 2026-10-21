@@ -1270,6 +1270,7 @@ input,textarea,select{font-size:16px!important;}
   <div class="inset" id="pantryList"></div>
   <button class="btn violet block" onclick="openBarcodeScanner()"><span data-icon="camera" data-icon-size="17"></span>Scan barcode</button>
   <div class="klabel" style="margin-top:16px">Import a receipt</div>
+  <label class="togglerow" style="gap:12px"><span>Use receipt AI<small class="finehint" style="display:block">Send this receipt to Cloudflare AI for reading. Optional; off means it stays on this device.</small></span><input type="checkbox" id="receiptUseAI" aria-label="Use Cloudflare receipt AI"></label>
   <div class="frow">
     <button class="btn tint" style="flex:1" onclick="document.getElementById('receiptPhoto').click()"><span data-icon="receipt" data-icon-size="17"></span>Scan receipt</button>
     <button class="btn tint" style="flex:1" onclick="document.getElementById('receiptGallery').click()">Upload image</button>
@@ -1735,7 +1736,7 @@ Instructions
 
 <div class="sheet" id="sheet-receiptreading" role="dialog" aria-label="Reading receipt">
  <div class="shead"><h3>Reading your receipt</h3><button class="btn sm grey" onclick="stopReceiptReading()">Cancel</button></div>
- <div class="sbody"><p id="receiptReadProgress" role="status" aria-live="polite"></p><p class="finehint">Long receipts are read in overlapping sections to keep small print legible. Your photo stays on this device. You’ll review every item before adding stock.</p></div>
+ <div class="sbody"><p id="receiptReadProgress" role="status" aria-live="polite"></p><p class="finehint" id="receiptReadPrivacy">You’ll review every item before adding stock.</p></div>
 </div>
 <!-- Scan review (receipt OCR) -->
 <div class="sheet" id="sheet-scanreview">

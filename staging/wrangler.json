@@ -1,14 +1,37 @@
 {
- "name":"ourhouse-staging",
- "account_id":"7eefbad996f6e17737d465867c1ffba9",
- "main":"./entry.mjs",
- "compatibility_date":"2026-05-15",
- "compatibility_flags":["nodejs_compat"],
- "workers_dev":false,
- "preview_urls":false,
- "minify":true,
- "observability":{"enabled":false},
- "assets":{"directory":"../dist/client","binding":"ASSETS","run_worker_first":true},
- "d1_databases":[{"binding":"DB","database_name":"ourhouse-staging","database_id":"9deb2758-9b6e-42b2-8c1e-f8940834e487","migrations_dir":"../drizzle"}],
- "vars":{"OURHOUSE_STAGING":"isolated","OURHOUSE_ACCOUNT_SIGNIN":"managed","OURHOUSE_STANDALONE":"enabled","OURHOUSE_PUBLIC_SIGNUP":"disabled"}
+  "name": "ourhouse-staging",
+  "account_id": "7eefbad996f6e17737d465867c1ffba9",
+  "main": "./entry.mjs",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "preview_urls": false,
+  "minify": true,
+  "observability": {
+    "enabled": false
+  },
+  "assets": {
+    "directory": "../dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ourhouse-staging",
+      "database_id": "9deb2758-9b6e-42b2-8c1e-f8940834e487",
+      "migrations_dir": "../drizzle"
+    }
+  ],
+  "vars": {
+    "OURHOUSE_STAGING": "isolated",
+    "OURHOUSE_ACCOUNT_SIGNIN": "managed",
+    "OURHOUSE_STANDALONE": "enabled",
+    "OURHOUSE_PUBLIC_SIGNUP": "disabled"
+  },
+  "ai": {
+    "binding": "RECEIPT_AI"
+  }
 }

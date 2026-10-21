@@ -6,7 +6,7 @@ Public app: https://ourhouse.ashishpatelaaa0.workers.dev/
 
 ## Current application
 
-Release 31 includes separate receipt camera and phone-gallery import, on-device long-receipt OCR, editable item review and a JSON download containing the original photo and extracted fields. Every import requires explicit product selection. A clean synthetic 72-product image passed browser extraction checks; this is not a guarantee for faded, angled or blurry real receipts.
+Release 32 includes optional opt-in Cloudflare receipt AI, total-weight imports, printed-total/unit reconciliation and longer receipt sections, alongside separate receipt camera and phone-gallery import, on-device long-receipt OCR, editable item review and a JSON download containing the original photo and extracted fields. Every import requires explicit product selection. A clean synthetic 72-product image passed browser extraction checks; this is not a guarantee for faded, angled or blurry real receipts.
 
 Families use independent Google accounts through Supabase. Household roles and membership are enforced on every request. The current account flow uses service-managed encrypted recovery; it must not be described as encryption that prevents the service operator from recovering account keys. Historical device-vault/recovery-code modules remain for compatibility. See the implementation and historical protocol documents before changing keys or access control.
 
@@ -60,4 +60,4 @@ Keep .env files, .dev.vars, work directories, logs, receipts, household exports,
 
 Legacy storage names and JavaScript identifiers intentionally remain for existing users. Change visible product copy to OurHouse without renaming stored crypto paths, account scopes or database records casually.
 
-This repository starts from the verified release-31 source snapshot. Historical scratch files and generated staging dry-run artifacts are excluded. The original local engineering checkout is retained during migration.
+This repository started from the verified release-31 source snapshot. Historical scratch files and generated staging dry-run artifacts are excluded. The original local engineering checkout is retained during migration.
