@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {JSDOM} from 'jsdom';
+test('in-app agent status is truthful, model text is inert, and reports transmit a fixed code without page content',async()=>{
+ const dom=new JSDOM('<main id="host"></main>',{url:'https://ourhouse.test',runScripts:'outside-only'}),w=dom.window,calls=[];
+ const state={enabled:true,lastCheck:1800000000000,checks:[{code:'RECIPE_LOGIC',ok:true}],flags:{recipes:false,receipts:true},ai:{status:'reviewed',lastReview:1800000000000,summary:'<img src=x onerror=evil()>'},repairs:[{}]};
+ try{w.AbortSignal=AbortSignal;w.OurHouseAuth={headers:async()=>({'authorization':'Bearer synthetic_local_session'})};w.fetch=async(path,options)=>{calls.push({path,options});return {ok:true,json:async()=>options.body?.includes('report')?{received:true}:state};};w.eval(readFileSync(new URL('../public/ourhouse-maintenance.js',import.meta.url),'utf8'));w.document.getElementById('host').innerHTML=w.OurHouseMaintenance.panel();await w.OurHouseMaintenance.mount();assert.equal(w.OurHouseMaintenance.allows('recipes'),false);assert.equal(w.OurHouseMaintenance.allows('receipts'),true);assert.match(w.document.getElementById('ourhouseCareAI').textContent,/AI review completed/);assert.equal(w.document.querySelector('#ourhouseCareSummary img'),null);w.document.getElementById('ourhouseCareProblem').value='RECEIPT_SCAN';await w.OurHouseMaintenance.reportProblem();const body=JSON.parse(calls.at(-1).options.body);assert.deepEqual(body,{action:'report',code:'RECEIPT_SCAN'});assert.doesNotMatch(calls.at(-1).options.body,/synthetic_local_session|img|family/);assert.match(w.document.getElementById('ourhouseCareNotice').textContent,/No family content/);
+ }finally{w.close();}
+});
+test('a verified interface failure requests public cache repair once without reloading or discarding drafts',async()=>{
+ const dom=new JSDOM('<textarea id="draft">Unsent family draft</textarea>',{url:'https://ourhouse.test',runScripts:'outside-only'}),w=dom.window,messages=[];let updates=0;
+ try{w.AbortSignal=AbortSignal;Object.defineProperty(w.navigator,'serviceWorker',{value:{getRegistration:async()=>({update:async()=>{updates++;},active:{postMessage:value=>messages.push(value)}})}});w.fetch=async()=>({ok:true,json:async()=>({enabled:true,flags:{refreshInterface:true}})});w.eval(readFileSync(new URL('../public/ourhouse-maintenance.js',import.meta.url),'utf8'));await w.OurHouseMaintenance.mount();await new Promise(resolve=>setTimeout(resolve,0));await w.OurHouseMaintenance.mount();assert.equal(updates,1);assert.equal(messages.length,1);assert.equal(messages[0].type,'OURHOUSE_REPAIR_PUBLIC_CACHE');assert.equal(w.document.getElementById('draft').value,'Unsent family draft');assert.equal(w.location.href,'https://ourhouse.test/');}finally{w.close();}
+});

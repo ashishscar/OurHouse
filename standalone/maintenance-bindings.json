@@ -1,0 +1,8 @@
+{
+  "services": [
+    {
+      "binding": "CARE_SERVICE",
+      "service": "ourhouse-care"
+    }
+  ]
+}

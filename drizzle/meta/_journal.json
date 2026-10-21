@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792037630026,
+      "tag": "0000_sudden_raza",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792037728709,
+      "tag": "0001_tan_harry_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792070989789,
+      "tag": "0002_chubby_expediter",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792088381878,
+      "tag": "0003_skinny_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792094035787,
+      "tag": "0004_public_launch",
+      "breakpoints": true
+    }
+  ]
+}

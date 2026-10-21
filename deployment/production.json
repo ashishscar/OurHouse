@@ -1,0 +1,46 @@
+{
+  "name": "ourhouse",
+  "account_id": "7eefbad996f6e17737d465867c1ffba9",
+  "main": "standalone/entry.mjs",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
+  "minify": true,
+  "assets": {
+    "directory": "dist/client",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ourhouse",
+      "database_id": "695864ff-5edc-4090-b286-205ef76d567a"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "OURHOUSE_STANDALONE": "enabled",
+    "OURHOUSE_PUBLIC_SIGNUP": "enabled",
+    "OURHOUSE_GOOGLE_SIGNIN": "enabled",
+    "OURHOUSE_EMAIL_SIGNIN": "disabled",
+    "OURHOUSE_RECEIPT_STORAGE": "supabase",
+    "OURHOUSE_RECEIPT_BUCKET": "ourhouse-receipts",
+    "OURHOUSE_ACCOUNT_SIGNIN": "managed"
+  },
+  "services": [
+    {
+      "binding": "CARE_SERVICE",
+      "service": "ourhouse-care"
+    }
+  ]
+}

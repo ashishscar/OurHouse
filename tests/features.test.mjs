@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {JSDOM,requestInterceptor,VirtualConsole} from 'jsdom';
+import {initialData} from '../lib/domain.mjs';
+const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,10));}throw Error('Lazy UI did not become ready');};
+test('production shell starts without optional tools and opens the actual expense and water chunks on demand',async()=>{
+ const html=readFileSync(new URL('../public/app-shell.html',import.meta.url),'utf8').replace(/<script[^>]*src="\/(?:ourhouse-auth|roomio-vault)\.js[^>]*><\/script>/g,''),loads=[],errors=[];
+ const resources={interceptors:[requestInterceptor(request=>{const path=new URL(request.url).pathname;loads.push(path);return new Response(path.endsWith('.js')?readFileSync(new URL('../public'+path,import.meta.url)):'',{headers:{'content-type':path.endsWith('.js')?'text/javascript':'text/css'}});})]};
+ const data=initialData();data.settings.diet='vegetarian';data.members={qa:{name:'QA',role:'admin',active:true}};
+ const dom=new JSDOM(html,{url:'https://ourhouse.test/',runScripts:'dangerously',resources,pretendToBeVisual:true,virtualConsole:new VirtualConsole(),beforeParse(w){Object.assign(w,{TextEncoder,AbortSignal,OurHouseAuth:{enabled:true,ready:Promise.resolve(),subject:'synthetic-qa',generation:1},RoomioVault:{api:async path=>{assert.equal(path,'session');return {user:{id:'qa',name:'QA'},house:{id:'qa_house',name:'QA',role:'admin',owner:'qa',revision:1},data};}}});w.crypto.randomUUID=()=>crypto.randomUUID();w.navigator.vibrate=()=>{};w.HTMLElement.prototype.scrollIntoView=function(){};w.matchMedia=()=>({matches:false,addEventListener(){}});w.confirm=()=>true;w.URL.revokeObjectURL=()=>{};w.fetch=async()=>Response.json({enabled:false});w.addEventListener('error',e=>errors.push(e.message));}});
+ try{const w=dom.window;await wait(()=>w.RoomioFamily?.getSession()?.house);assert.ok(!loads.some(p=>/\/(?:expenses|water)-/.test(p)));await w.openExpenses();assert.ok(loads.some(p=>/\/expenses-/.test(p)));assert.match(w.document.getElementById('expensesBody').textContent,/group/i);w.openExpenseGroupEditor(null);assert.ok(w.document.getElementById('expenseGroupName'));await w.openWaterBillSheet();assert.ok(loads.some(p=>/\/water-/.test(p)));assert.ok(w.document.getElementById('wbAmount'));assert.deepEqual(errors,[]);}finally{dom.window.close();}
+});
+test('a slow feature cannot open in a different account or after the user navigates away; failed downloads can retry',async()=>{
+ const dom=new JSDOM('<script type="application/json" id="ourhouse-feature-map">{"expenses":"/assets/expenses-1234567890abcdef.js"}</script>',{url:'https://ourhouse.test',runScripts:'outside-only'}),w=dom.window;let actor='one',opened=0;
+ try{w.RoomioFamily={getSession:()=>({user:{id:actor},house:{id:actor}})};w.showToast=()=>{};w.eval(readFileSync(new URL('../public/ourhouse-features.js',import.meta.url),'utf8'));const first=w.OurHouseFeatures.run('expenses','openSynthetic',[]);const script=w.document.querySelector('script[src]');actor='two';w.openSynthetic=()=>opened++;script.onload();await first;assert.equal(opened,0);const next=w.OurHouseFeatures.run('expenses','openSynthetic',[]);w.OurHouseFeatures.cancel();await next;assert.equal(opened,0);await w.OurHouseFeatures.run('expenses','openSynthetic',[]);assert.equal(opened,1);}finally{w.close();}
+});

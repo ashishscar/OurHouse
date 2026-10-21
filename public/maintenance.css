@@ -1,0 +1,7 @@
+#ourhouseCareGroup summary{cursor:pointer}
+#ourhouseCareGroup .settings-group-body>p{line-height:1.65}
+#ourhouseCareGroup .settings-group-body>details{margin-top:15px;border-top:1px solid var(--sep);padding-top:12px}
+#ourhouseCareGroup .settings-group-body>details>summary{font-size:13px;font-weight:650;min-height:36px}
+#ourhouseCareGroup .btn{margin-top:9px}
+
+.family-metric-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;margin-top:16px;font-size:14px}.family-metric-choice input{width:20px;height:20px;flex:none;accent-color:var(--teal)}

@@ -1,0 +1,28 @@
+#sheet-dish .dish-name-field{position:relative}
+#sheet-dish .dish-suggestion-box{padding:12px 14px;margin-bottom:18px;border:1px solid var(--sep);border-radius:14px;background:var(--card)}
+#sheet-dish .dish-online-toggle{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:650;min-height:28px}
+#sheet-dish .dish-online-toggle input{width:18px;height:18px;accent-color:var(--teal);flex:none}
+#sheet-dish .dish-search-hint{margin:5px 0;color:var(--ink2)}
+#sheet-dish .dish-search-privacy{margin-top:6px;font-size:11px;color:var(--ink2)}
+#sheet-dish .dish-search-privacy summary{cursor:pointer;padding:5px 0}
+#sheet-dish .dish-servings{display:flex;align-items:center;gap:12px}
+#sheet-dish .dish-servings label{font-size:15px;font-weight:650}
+#sheet-dish .dish-servings input{width:78px;min-height:44px;border:0;border-radius:12px;padding:10px;text-align:center;background:var(--fill2);color:var(--ink);font:inherit}
+#sheet-dish .dish-servings span{font-size:13px;color:var(--ink2)}
+#sheet-dish #dishServingsHelp{margin:6px 0 18px}
+#sheet-dish .dish-optional{border-top:1px solid var(--sep);padding:3px 0}
+#sheet-dish .dish-optional>summary{display:flex;gap:10px;align-items:center;list-style:none;cursor:pointer;padding:13px 0;font-size:14px;font-weight:650;min-height:48px}
+#sheet-dish .dish-optional>summary::-webkit-details-marker{display:none}
+#sheet-dish .dish-optional>summary:after{content:'+';margin-left:auto;color:var(--ink2);font-size:20px;font-weight:400}
+#sheet-dish .dish-optional[open]>summary:after{content:'−'}
+#sheet-dish .dish-optional>summary span{font-size:11px;font-weight:400;color:var(--ink2)}
+#sheet-dish .dish-editor-actions{flex:none;border-top:1px solid var(--sep);padding:12px 20px calc(12px + env(safe-area-inset-bottom));background:var(--paper)}
+#sheet-dish .dish-editor-actions .btn{min-height:46px}
+#sheet-dish #dRecipeSource:empty{display:none}
+#sheet-dish .dish-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+#sheet-dish .ingrow .rm{min-width:36px;min-height:44px}
+#sheet-dish [hidden]{display:none!important}
+@media(max-width:400px){#sheet-dish .ingrow{gap:5px}#sheet-dish .ingrow input{padding:11px 8px}#sheet-dish .ingrow select{padding:11px 5px}#sheet-dish .ingrow input.iname{flex:2}#sheet-dish .ingrow .iqty{flex:1.1}}
+
+.grocery-amount{grid-column:1 / -1;border-top:1px solid var(--sep);margin-top:8px}
+.grocery-amount summary{min-height:44px;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}.grocery-amount summary span{color:var(--ink2);font-size:12px}.grocery-amount .gmeasure{display:flex;gap:8px;margin:0 0 10px}.grocery-amount input,.grocery-amount select{font-size:16px;min-height:44px}#gQuickPreview{grid-column:1 / -1;margin:6px 0 0}
