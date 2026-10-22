@@ -37,3 +37,12 @@ test('angle variants are evaluated separately without becoming independent sourc
  assert.equal(report.poses.find(p=>p.pose==='clockwise-18').allFieldsExact,0);
  assert.throws(()=>evaluatePredictions([prediction(tilted,{pose:'straight'})],[tilted]),/not in/);
 });
+test('malformed-row diagnostics cannot turn a rejected receipt into a passing extraction',()=>{
+ const ref=reference('a');
+ const report=evaluatePredictions([prediction(ref,{prediction:JSON.stringify({rows:[row,['2 @ $1.00','','','Rice','p']]})})],[ref]);
+ const result=report.cases[0];
+ assert.equal(result.valid,false);assert.equal(report.aggregate.matched,0);
+ assert.deepEqual(result.rowDiagnostics.rejectedRowIndices,[1]);
+ assert.equal(result.rowDiagnostics.validRowsOnly.matched,1);
+ assert.equal(result.rowDiagnostics.totalRows,2);
+});

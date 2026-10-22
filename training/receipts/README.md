@@ -121,6 +121,10 @@ on validation receipts. Keep final test receipts out of training and parameter
 selection. Compare purchased-line recall/precision, printed-label fidelity,
 amounts, quantities, categories, subtotal reconciliation and end-to-end latency.
 Preserve failure cases; equal totals are not proof of correct extraction.
+For a structurally rejected receipt, `rowDiagnostics` identifies malformed row
+indices and separately examines rows that individually satisfy the protocol.
+It never repairs a row or changes the strict receipt result or aggregate score.
+These partial diagnostics help investigate failures; they cannot approve a model.
 The evaluator requires the independent reference split. Missing crops retain all
 expected purchases, duplicate crops are rejected and unknown provider completion
 status is reported separately. A diagnostic `infer_local.py --limit 1` run must

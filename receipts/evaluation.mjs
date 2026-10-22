@@ -50,3 +50,17 @@ export function evaluateReceipt(expectedValue,predictedValue){
   referenceNet:net(expected),predictedNet:valid?net(predicted):null,printedSubtotal:target,
   reconciled:valid&&target!==null&&net(predicted)===target,errors};
 }
+
+// Diagnostic only: isolate malformed rows without repairing them or allowing a
+// partially valid receipt to pass the strict result above. Reports remain private.
+export function diagnoseReceiptRows(expectedValue,predictedValue){
+ let value=predictedValue;
+ try{
+  if(typeof value==='string'){if(value.length>200000)throw Error();value=JSON.parse(value.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}
+  if(!value||!Array.isArray(value.rows)||value.rows.length>1000)throw Error();
+ }catch{return {jsonValid:false,rejectedRowIndices:[],validRowsOnly:null};}
+ const accepted=[],rejectedRowIndices=[];
+ value.rows.forEach((row,index)=>{try{accepted.push(...validateReceiptRows({rows:[row]}).rows);}catch{rejectedRowIndices.push(index);}});
+ return {jsonValid:true,totalRows:value.rows.length,rejectedRowIndices,validRowsOnly:evaluateReceipt(expectedValue,{rows:accepted}),
+  note:'Rejected rows are omitted only from this diagnostic. The strict receipt result remains authoritative; this is not an accepted extraction.'};
+}

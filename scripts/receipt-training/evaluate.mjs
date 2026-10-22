@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {evaluateReceipt} from '../../receipts/evaluation.mjs';
+import {evaluateReceipt,diagnoseReceiptRows} from '../../receipts/evaluation.mjs';
 const keyOf=record=>JSON.stringify([String(record.source_group),record.pose??null,record.images]);
 const readRows=file=>readFileSync(file,'utf8').split('\n').filter(Boolean).map(line=>JSON.parse(line));
 
@@ -37,9 +37,12 @@ export function evaluatePredictions(records,references){
   else if(record.finish_reason!=='stop')group.truncated=true;
   try{const parsed=JSON.parse(record.prediction.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));if(!Array.isArray(parsed.rows))throw Error();group.predicted.rows.push(...parsed.rows);}catch{group.valid=false;}
  }
- const cases=[...groups.values()].map(g=>({source:g.source,...(g.pose===null?{}:{pose:g.pose}),crops:g.crops,missingCrops:g.missingCrops,sequentialInferenceSeconds:g.seconds,
-  truncated:g.truncated,unknownFinish:g.unknownFinish,providerFailures:g.providerFailures,
-  ...evaluateReceipt(g.expected,g.valid&&!g.truncated?g.predicted:null)}));
+ const cases=[...groups.values()].map(g=>{
+  const result=evaluateReceipt(g.expected,g.valid&&!g.truncated?g.predicted:null);
+  return {source:g.source,...(g.pose===null?{}:{pose:g.pose}),crops:g.crops,missingCrops:g.missingCrops,sequentialInferenceSeconds:g.seconds,
+   truncated:g.truncated,unknownFinish:g.unknownFinish,providerFailures:g.providerFailures,...result,
+   ...(!result.valid&&g.valid&&!g.truncated?{rowDiagnostics:diagnoseReceiptRows(g.expected,g.predicted)}:{})};
+ });
  const counters=['expected','predicted','matched','missing','extra','labelExact','amountExact','stockExact','nameExact','categoryExact','allFieldsExact'];
  const aggregate=Object.fromEntries(counters.map(key=>[key,cases.reduce((sum,c)=>sum+c[key],0)]));
  aggregate.recall=aggregate.matched/Math.max(aggregate.expected,1);aggregate.precision=aggregate.matched/Math.max(aggregate.predicted,1);

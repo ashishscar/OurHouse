@@ -1,10 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {identifyReceiptItems,receiptSection,supportedName} from '../receipts/identity.mjs';
+import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
+});
+test('decimal fat percentages cannot become a different percentage during name shortening',()=>{
+ assert.equal(supportedName('3.25% Milk','TEST BRAND MILK 3.25%'),true);
+ for(const name of ['25% Milk','3% Milk','Milk'])assert.equal(supportedName(name,'TEST BRAND MILK 3.25%'),false);
+ assert.equal(qualifiedReceiptName('Milk','TEST BRAND MILK 3.25%'),'3.25% Milk');
+ assert.equal(qualifiedReceiptName('25% Milk','TEST BRAND MILK 3.25%'),'');
+});
+test('short names recover only qualifiers printed on the same product and keep opaque labels',()=>{
+ assert.equal(qualifiedReceiptName('Cashews','TEST BRAND SPLIT CASHEWS 500G'),'Split Cashews');
+ assert.equal(qualifiedReceiptName('Green peas','TEST BRAND ORGANIC GREEN PEAS 1KG'),'Organic Green peas');
+ assert.equal(qualifiedReceiptName('Cream','TEST BRAND WHIPPING CREAM 35%'),'35% Whipping Cream');
+ for(const name of ['Frozen peas','Whole rice','Paper towels','Blue'])assert.equal(qualifiedReceiptName(name,'TEST BRAND BLUE'),'');
+ const row={name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'};
+ assert.equal(identifyReceiptItems([row],[{source:row.raw,name:'Blue',section:'unknown'}])[0].name,row.name);
+ const cream={name:'TEST BRAND WHIPPING CREAM 35%',raw:'TEST BRAND WHIPPING CREAM 35% $4.00',qty:2,unit:'kg',amount:'4.00'};
+ const named=identifyReceiptItems([cream],[{source:cream.raw,name:'Cream',section:'pantry'}])[0];
+ assert.equal(named.name,'35% Whipping Cream');assert.equal(named.receiptName,cream.name);
+ assert.equal(named.qty,2);assert.equal(named.unit,'kg');assert.equal(named.amount,'4.00');assert.equal(named.raw,cream.raw);
 });
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];
