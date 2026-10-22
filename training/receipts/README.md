@@ -42,6 +42,34 @@ normal tiling. Training adds shifted boundaries and mild contrast/blur variants.
 Blue boundaries define ownership; faded adjacent context retains wrapped product
 and quantity evidence without requiring name-based deduplication.
 
+### Angles and perspective
+
+Use reviewed **complete receipt** pairs for pose augmentation. Do not rotate
+ownership strips: a transformed boundary can cross a label or change which
+purchase owns its quantity continuation. Check all first/last labels and prices
+before approving complete-receipt privacy bounds.
+
+```sh
+python scripts/receipt-training/test_angles.py
+python scripts/receipt-training/angles.py \
+  --data work/receipt-training/reviewed-whole-receipts \
+  --output work/receipt-training/angled-receipts
+```
+
+The fixed policy includes the original view, clockwise/anticlockwise 18-degree
+rotation, left/right perspective and combined perspective with 8-degree rotation.
+Rotations expand the canvas; perspective maps the complete source into an inset
+quadrilateral. Product targets remain unchanged, and source EXIF is omitted.
+Review the generated private images and `poses.private.json` before training.
+These transforms simulate camera poses; they do not establish accuracy on real
+curved, folded, blurred or partially obscured receipts.
+
+Source receipts keep their original train/validation/test split. Derived views
+are not additional independent receipts. The inference and evaluation tools
+retain `pose` and report each source/pose separately, including a per-pose summary,
+so a good straight scan cannot hide failures on angled versions. Compare base
+and trained models with identical decoding, images and independent references.
+
 ## Model and release checks
 
 The candidate hosting route is a private rank-8 LoRA for Cloudflare's

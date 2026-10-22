@@ -28,3 +28,12 @@ test('a provider failure cannot pass even when its payload contains valid JSON',
  const ref=reference('a'),report=evaluatePredictions([prediction(ref,{provider_success:false})],[ref]);
  assert.equal(report.cases[0].providerFailures,1);assert.equal(report.cases[0].valid,false);
 });
+test('angle variants are evaluated separately without becoming independent source receipts',()=>{
+ const straight={...reference('a'),pose:'straight'},tilted={...reference('b'),pose:'clockwise-18'};
+ const report=evaluatePredictions([prediction(straight,{pose:'straight'}),prediction(tilted,{pose:'clockwise-18',prediction:'{"rows":[]}'})],[straight,tilted]);
+ assert.equal(report.independentSources,1);assert.equal(report.cases.length,2);
+ assert.deepEqual(report.cases.map(c=>[c.pose,c.expected,c.missing]),[['straight',1,0],['clockwise-18',1,1]]);
+ assert.equal(report.poses.find(p=>p.pose==='straight').allFieldsExact,1);
+ assert.equal(report.poses.find(p=>p.pose==='clockwise-18').allFieldsExact,0);
+ assert.throws(()=>evaluatePredictions([prediction(tilted,{pose:'straight'})],[tilted]),/not in/);
+});

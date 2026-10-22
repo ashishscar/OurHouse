@@ -67,6 +67,8 @@ def main():
                       "finish_reason": "wall_limit" if stopped else result.finish_reason,
                       "split_examples": total_examples, "evaluated_examples": len(examples),
                       "generated_tokens": result.generation_tokens, "peak_gb": result.peak_memory}
+            if "pose" in example:
+                record["pose"] = example["pose"]
             file.write(json.dumps(record, ensure_ascii=False)+"\n")
             file.flush()
             print(json.dumps({"example": index+1, "of": len(examples), "seconds": round(record["seconds"], 2),

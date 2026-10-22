@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {evaluateReceipt} from '../../receipts/evaluation.mjs';
-const keyOf=record=>JSON.stringify([String(record.source_group),record.images]);
+const keyOf=record=>JSON.stringify([String(record.source_group),record.pose??null,record.images]);
 const readRows=file=>readFileSync(file,'utf8').split('\n').filter(Boolean).map(line=>JSON.parse(line));
 
 // Independent references define the denominator, including missing crops.
@@ -12,6 +12,7 @@ export function evaluatePredictions(records,references){
  const expected=new Map(),predictions=new Map(),groups=new Map();
  for(const reference of references){
   if(!Array.isArray(reference.images)||!reference.images.length)throw Error('Missing reference image identity');
+  if(reference.pose!==undefined&&(typeof reference.pose!=='string'||!reference.pose.trim()||reference.pose.length>80))throw Error('Invalid reference pose');
   const key=keyOf(reference);if(expected.has(key))throw Error('Duplicate reference crop');
   const completion=reference.messages.at(-1);if(completion?.role!=='assistant')throw Error('Missing reference completion');
   expected.set(key,{reference,rows:JSON.parse(completion.content).rows});
@@ -25,8 +26,8 @@ export function evaluatePredictions(records,references){
   predictions.set(key,record);
  }
  for(const[key,{reference,rows}]of expected){
-  const source=String(reference.source_group);let group=groups.get(source);
-  if(!group)groups.set(source,group={expected:{rows:[]},predicted:{rows:[]},seconds:0,crops:0,missingCrops:0,valid:true,truncated:false,unknownFinish:0,providerFailures:0});
+  const source=String(reference.source_group),pose=reference.pose??null,groupKey=JSON.stringify([source,pose]);let group=groups.get(groupKey);
+  if(!group)groups.set(groupKey,group={source,pose,expected:{rows:[]},predicted:{rows:[]},seconds:0,crops:0,missingCrops:0,valid:true,truncated:false,unknownFinish:0,providerFailures:0});
   group.expected.rows.push(...rows);group.crops++;
   const record=predictions.get(key);
   if(!record){group.missingCrops++;group.valid=false;continue;}
@@ -36,14 +37,15 @@ export function evaluatePredictions(records,references){
   else if(record.finish_reason!=='stop')group.truncated=true;
   try{const parsed=JSON.parse(record.prediction.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));if(!Array.isArray(parsed.rows))throw Error();group.predicted.rows.push(...parsed.rows);}catch{group.valid=false;}
  }
- const cases=[...groups].map(([source,g])=>({source,crops:g.crops,missingCrops:g.missingCrops,sequentialInferenceSeconds:g.seconds,
+ const cases=[...groups.values()].map(g=>({source:g.source,...(g.pose===null?{}:{pose:g.pose}),crops:g.crops,missingCrops:g.missingCrops,sequentialInferenceSeconds:g.seconds,
   truncated:g.truncated,unknownFinish:g.unknownFinish,providerFailures:g.providerFailures,
   ...evaluateReceipt(g.expected,g.valid&&!g.truncated?g.predicted:null)}));
  const counters=['expected','predicted','matched','missing','extra','labelExact','amountExact','stockExact','nameExact','categoryExact','allFieldsExact'];
  const aggregate=Object.fromEntries(counters.map(key=>[key,cases.reduce((sum,c)=>sum+c[key],0)]));
  aggregate.recall=aggregate.matched/Math.max(aggregate.expected,1);aggregate.precision=aggregate.matched/Math.max(aggregate.predicted,1);
- return {completeSplit:predictions.size===expected.size,expectedCrops:expected.size,receivedCrops:predictions.size,cases,aggregate,
-  notes:'Private cropped-image benchmark. Not end-to-end phone latency. Unknown finish reasons do not establish provider completion. Same decoding settings required for comparison.'};
+ const poses=[...new Set(cases.map(c=>c.pose).filter(Boolean))].map(pose=>{const selected=cases.filter(c=>c.pose===pose);return {pose,cases:selected.length,validCases:selected.filter(c=>c.valid).length,...Object.fromEntries(counters.map(key=>[key,selected.reduce((sum,c)=>sum+c[key],0)])),sequentialInferenceSeconds:selected.reduce((sum,c)=>sum+c.sequentialInferenceSeconds,0)};});
+ return {completeSplit:predictions.size===expected.size,independentSources:new Set(cases.map(c=>c.source)).size,expectedCrops:expected.size,receivedCrops:predictions.size,cases,aggregate,...(poses.length?{poses}:{}),
+  notes:'Private image benchmark. Derived pose views are not independent receipts. Not end-to-end phone latency. Unknown finish reasons do not establish provider completion. Same decoding settings required for comparison.'};
 }
 
 function main(){
