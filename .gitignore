@@ -66,3 +66,7 @@ next-env.d.ts
 *.sqlite
 *.sqlite3
 *.db
+
+# Local Python training utilities
+__pycache__/
+*.pyc
