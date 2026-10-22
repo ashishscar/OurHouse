@@ -10,6 +10,22 @@ test('long warehouse receipt sections retain readable width and cover the whole 
  assert.throws(()=>sectionPlan(1000,60000),/too long/);
 });
 
+test('AI scales the detected receipt paper before segmenting, retaining native letter detail',()=>{
+ const plan=sectionPlan(4000,6000,{ai:true,horizontalCrop:{left:1200,width:1000}});
+ assert.equal(plan.scale,1);assert.equal(plan.width,1000);assert.equal(plan.height,6000);
+ assert.equal(plan.sections[0].left/plan.scale,1200);
+ assert.equal(plan.sections.at(-1).top+plan.sections.at(-1).height,6000);
+ for(const page of plan.sections){assert.equal(page.width,1000);assert.ok(page.width*page.height<=4000000);}
+ const large=sectionPlan(4000,6000,{ai:true,horizontalCrop:{left:500,width:2000}});
+ assert.equal(large.width,1400);assert.equal(large.scale,.7);assert.ok(Math.abs(large.sections[0].left/large.scale-500)<1e-8);
+});
+
+test('uncertain paper bounds retain the full image and the local OCR plan stays unchanged',()=>{
+ assert.deepEqual(sectionPlan(4000,6000,{ai:true}),sectionPlan(4000,6000,{ai:true,horizontalCrop:null}));
+ assert.deepEqual(sectionPlan(4000,6000),sectionPlan(4000,6000,{horizontalCrop:{left:1200,width:1000}}));
+ assert.throws(()=>sectionPlan(4000,6000,{ai:true,horizontalCrop:{left:3900,width:200}}),/Invalid receipt paper/);
+});
+
 test('a 90-product Costco-style receipt pairs separated name and price columns and preserves repeated purchases',()=>{
  const plan=sectionPlan(1800,6200),words=[];
  for(let i=0;i<90;i++){
