@@ -63,6 +63,10 @@ the version-scoped causal bridge in `mllama_compat.py`. Run
 `python scripts/receipt-training/test_causality.py` before training: modifying a
 future synthetic token must not change earlier hidden states. Runs without this
 bridge have invalid training losses and must not be used as candidates.
+The runner also checks each loss and gradient for finite values before the
+optimizer runs and clips the global gradient norm to 1. Run
+`python scripts/receipt-training/test_numerics.py` to verify these checks. Stop and
+diagnose a non-finite batch; never skip it or publish a later corrupted adapter.
 
 ```sh
 python scripts/receipt-training/train_local.py \
@@ -73,7 +77,8 @@ python scripts/receipt-training/infer_local.py \
   --output work/receipt-training/base-valid.jsonl
 # Repeat with --adapter work/receipt-training/adapters/candidate for comparison.
 node scripts/receipt-training/evaluate.mjs \
-  work/receipt-training/base-valid.jsonl work/receipt-training/base-valid-report.json
+  work/receipt-training/base-valid.jsonl work/receipt-training/base-valid-report.json \
+  work/receipt-training/data/valid.jsonl
 ```
 
 The local runner disables Hub access and telemetry and caps MLX allocation. It
@@ -88,6 +93,11 @@ on validation receipts. Keep final test receipts out of training and parameter
 selection. Compare purchased-line recall/precision, printed-label fidelity,
 amounts, quantities, categories, subtotal reconciliation and end-to-end latency.
 Preserve failure cases; equal totals are not proof of correct extraction.
+The evaluator requires the independent reference split. Missing crops retain all
+expected purchases, duplicate crops are rejected and unknown provider completion
+status is reported separately. A diagnostic `infer_local.py --limit 1` run must
+never be presented as a complete split. Its token progress and `--max-seconds`
+budget expose stalled/looping generation; timeout outputs remain failed cases.
 
 Export only a verified compatible adapter and configuration to the owner's
 private Cloudflare fine-tune. Check tensor names, shapes, rank and maximum adapter

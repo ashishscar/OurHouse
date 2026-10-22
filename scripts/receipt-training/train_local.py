@@ -22,6 +22,8 @@ def main():
     settings = json.loads(args.config.read_text())
     if settings.get("wandb") or settings.get("dataset"):
         raise ValueError("External training datasets and telemetry are disabled")
+    if settings.get("compile") or settings.get("gradient_accumulation_steps", 1) != 1:
+        raise ValueError("The numerical guard requires eager, single-step updates")
     for key in ["model", "data"]:
         if not Path(settings[key]).is_dir():
             raise ValueError("Model and data must be existing local directories")
@@ -35,10 +37,12 @@ def main():
     import mlx.core as mx
     from mlx_vlm.train import main as train
     from mllama_compat import install_causal_padding_fix
+    from numerics import install_numerical_guard
 
     mx.set_memory_limit(args.memory_gib*1024**3)
     mx.set_cache_limit(1024**3)
     install_causal_padding_fix()
+    install_numerical_guard()
     # The upstream CLI reads only this local config. No provider/API keys are used.
     sys.argv = [sys.argv[0], "--config", str(args.config.resolve())]
     train()
