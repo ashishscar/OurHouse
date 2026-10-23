@@ -10,6 +10,7 @@ test('missing crops retain all independently expected purchases',()=>{
  const refs=[reference('a'),reference('b')],report=evaluatePredictions([prediction(refs[0])],refs);
  assert.equal(report.completeSplit,false);assert.equal(report.expectedCrops,2);
  assert.equal(report.aggregate.expected,2);assert.equal(report.cases[0].missingCrops,1);assert.equal(report.cases[0].valid,false);
+ assert.equal(report.completeExactSplit,false);
 });
 test('duplicate crops and modified references cannot improve benchmark scores',()=>{
  const ref=reference('a'),record=prediction(ref);
@@ -21,6 +22,8 @@ test('unknown provider finish is distinguished from known truncation',()=>{
  const ref=reference('a');
  const unknown=evaluatePredictions([prediction(ref,{finish_reason:'unspecified'})],[ref]);
  assert.equal(unknown.cases[0].unknownFinish,1);assert.equal(unknown.cases[0].truncated,false);assert.equal(unknown.aggregate.allFieldsExact,1);
+ assert.equal(unknown.completeExactSplit,false);
+ assert.equal(evaluatePredictions([prediction(ref)],[ref]).completeExactSplit,true);
  const truncated=evaluatePredictions([prediction(ref,{finish_reason:'length'})],[ref]);
  assert.equal(truncated.cases[0].truncated,true);assert.equal(truncated.cases[0].valid,false);
 });
@@ -45,4 +48,5 @@ test('malformed-row diagnostics cannot turn a rejected receipt into a passing ex
  assert.deepEqual(result.rowDiagnostics.rejectedRowIndices,[1]);
  assert.equal(result.rowDiagnostics.validRowsOnly.matched,1);
  assert.equal(result.rowDiagnostics.totalRows,2);
+ assert.equal(report.completeExactSplit,false);
 });

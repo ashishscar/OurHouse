@@ -125,6 +125,12 @@ For a structurally rejected receipt, `rowDiagnostics` identifies malformed row
 indices and separately examines rows that individually satisfy the protocol.
 It never repairs a row or changes the strict receipt result or aggregate score.
 These partial diagnostics help investigate failures; they cannot approve a model.
+`metadataExact` checks separate discount, subtotal, tax, total and item-count rows.
+`exactExtraction` requires matching purchased labels, names, amounts, stock and
+categories, matching metadata, no missing or extra purchases, and the reference
+net amount. `completeExactSplit` additionally requires every reference image and
+known successful completion. These are dataset checks, not deployment approval:
+final held-out tests, hosted timing and the normal release gates remain required.
 The evaluator requires the independent reference split. Missing crops retain all
 expected purchases, duplicate crops are rejected and unknown provider completion
 status is reported separately. A diagnostic `infer_local.py --limit 1` run must

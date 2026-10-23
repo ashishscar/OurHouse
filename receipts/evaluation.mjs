@@ -27,6 +27,7 @@ function stock(row){const item=parseReceiptFields({label:row[0],amount:row[1],qu
 const cents=value=>Math.round(Number(value)*100);
 function subtotal(rows){const s=rows.filter(row=>row[4]==='s');return s.length===1?cents(s[0][1]):null;}
 function net(rows){return rows.reduce((sum,row)=>sum+(product(row)?cents(row[1]):row[4]==='d'?-cents(row[1]):0),0);}
+function metadata(rows){return rows.filter(row=>!product(row)).map(row=>row.map((value,index)=>index===1?value:norm(value)));}
 function wholeReceipt(value){
  if(typeof value==='string'){if(value.length>200000)throw Error('Receipt too large');value=JSON.parse(value.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));}
  if(!value||!Array.isArray(value.rows)||value.rows.length>1000)throw Error('Invalid whole receipt');
@@ -45,10 +46,11 @@ export function evaluateReceipt(expectedValue,predictedValue){
   for(const[key,value]of Object.entries(checks))metrics[key]+=Number(value);
   if(Object.values(checks).every(Boolean))metrics.allFieldsExact++;else errors.push({expectedIndex:i,predictedIndex:j,checks});
  }
- const target=subtotal(expected);
+ const target=subtotal(expected),metadataExact=valid&&JSON.stringify(metadata(expected))===JSON.stringify(metadata(predicted));
  return {...metrics,precision:p.length?pairs.length/p.length:0,recall:e.length?pairs.length/e.length:1,
   referenceNet:net(expected),predictedNet:valid?net(predicted):null,printedSubtotal:target,
-  reconciled:valid&&target!==null&&net(predicted)===target,errors};
+  reconciled:valid&&target!==null&&net(predicted)===target,metadataExact,
+  exactExtraction:valid&&e.length===p.length&&metrics.allFieldsExact===e.length&&metadataExact&&net(predicted)===net(expected),errors};
 }
 
 // Diagnostic only: isolate malformed rows without repairing them or allowing a

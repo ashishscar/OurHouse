@@ -46,9 +46,10 @@ export function evaluatePredictions(records,references){
  const counters=['expected','predicted','matched','missing','extra','labelExact','amountExact','stockExact','nameExact','categoryExact','allFieldsExact'];
  const aggregate=Object.fromEntries(counters.map(key=>[key,cases.reduce((sum,c)=>sum+c[key],0)]));
  aggregate.recall=aggregate.matched/Math.max(aggregate.expected,1);aggregate.precision=aggregate.matched/Math.max(aggregate.predicted,1);
- const poses=[...new Set(cases.map(c=>c.pose).filter(Boolean))].map(pose=>{const selected=cases.filter(c=>c.pose===pose);return {pose,cases:selected.length,validCases:selected.filter(c=>c.valid).length,...Object.fromEntries(counters.map(key=>[key,selected.reduce((sum,c)=>sum+c[key],0)])),sequentialInferenceSeconds:selected.reduce((sum,c)=>sum+c.sequentialInferenceSeconds,0)};});
- return {completeSplit:predictions.size===expected.size,independentSources:new Set(cases.map(c=>c.source)).size,expectedCrops:expected.size,receivedCrops:predictions.size,cases,aggregate,...(poses.length?{poses}:{}),
-  notes:'Private image benchmark. Derived pose views are not independent receipts. Not end-to-end phone latency. Unknown finish reasons do not establish provider completion. Same decoding settings required for comparison.'};
+ const poses=[...new Set(cases.map(c=>c.pose).filter(Boolean))].map(pose=>{const selected=cases.filter(c=>c.pose===pose);return {pose,cases:selected.length,validCases:selected.filter(c=>c.valid).length,exactCases:selected.filter(c=>c.exactExtraction&&!c.unknownFinish).length,...Object.fromEntries(counters.map(key=>[key,selected.reduce((sum,c)=>sum+c[key],0)])),sequentialInferenceSeconds:selected.reduce((sum,c)=>sum+c.sequentialInferenceSeconds,0)};});
+ const completeSplit=predictions.size===expected.size;
+ return {completeSplit,completeExactSplit:completeSplit&&cases.every(c=>c.exactExtraction&&!c.unknownFinish),independentSources:new Set(cases.map(c=>c.source)).size,expectedCrops:expected.size,receivedCrops:predictions.size,cases,aggregate,...(poses.length?{poses}:{}),
+  notes:'Private image benchmark. Derived pose views are not independent receipts. Not end-to-end phone latency or release approval. Exact extraction requires matching purchased labels, names, amounts, stock, categories and separate discount, tax, total and count rows. Unknown finish reasons do not establish provider completion. Same decoding settings required for comparison.'};
 }
 
 function main(){
@@ -61,6 +62,6 @@ if(destination===root||destination.startsWith(root+path.sep)){
 if(existsSync(destination))throw Error('Do not overwrite an existing evaluation');
 const report=evaluatePredictions(readRows(input),readRows(referenceFile));
 writeFileSync(destination,JSON.stringify(report,null,2)+'\n',{mode:0o600,flag:'wx'});
-console.log(JSON.stringify({receipts:report.cases.length,completeSplit:report.completeSplit,...report.aggregate}));
+console.log(JSON.stringify({receipts:report.cases.length,completeSplit:report.completeSplit,completeExactSplit:report.completeExactSplit,...report.aggregate}));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main();
