@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseReceipt,pantryReceipt,expenseReceipt} from '../receipts/parser.mjs';
+import {parseReceipt,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 
 test('receipt prices and tax flags never become product names or pantry quantities',()=>{
  const rows=pantryReceipt('FAMILY MARKET\n123 Main Street\n123456 MILK 2L    $5.99 F\nBASMATI RICE 5 kg  18.49H\nBREAD 3.49 A\nSUBTOTAL 27.97\nHST 1.20\nTOTAL 29.17\nVISA 29.17\nTHANK YOU');
@@ -76,4 +76,42 @@ test('tax codes and each-price rows stay metadata, and sale notices never become
 test('a printed per-one-unit rate does not discard the actual purchased weight',()=>{
  const rows=parseReceipt('PAPAYA(LB) $8.12\n3.26 lb @ $2.49 per 1 lb\nGINGER $2.79\n1 kg @ $2.79 per 1 kg');
  assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
+});
+
+test('an interposed discount does not discard a uniquely matching pack quantity',()=>{
+ for(const discount of ['-$1.14','Coupon -$1.14','$1.14-']){
+  const rows=parseReceipt('TEST OATS 250G $9.51\n'+discount+'\n3 @ $3.17\nTEST PEARS $4.00\nSUBTOTAL $12.37');
+  assert.equal(rows.length,2);assert.equal(rows[0].qty,750);assert.equal(rows[0].unit,'g');
+  assert.equal(rows[0].packCount,3);assert.equal(rows[0].amount,'9.51');assert.equal(rows[0].warning,undefined);
+  assert.ok(rows[0].raw.endsWith('3 @ $3.17'));assert.equal(rows[1].qty,1);
+ }
+ const end=parseReceipt('TEST OATS 250G $9.51\n-$1.14\n3 @ $3.17');
+ assert.equal(end[0].qty,750);
+});
+
+test('a quantity after a discount can belong to the next product; equal totals remain ambiguous',()=>{
+ const next=parseReceipt('TEST SOAP $5.00\n-$1.00\n2 @ $3.17\nTEST RICE 1KG $6.34');
+ assert.equal(next[0].qty,1);assert.equal(next[1].qty,2);assert.equal(next[1].unit,'kg');
+ const both=parseReceipt('TEST SOAP $6.34\n-$1.00\n2 @ $3.17\nTEST RICE 1KG $6.34');
+ assert.equal(both[0].qty,1);assert.equal(both[1].qty,1);
+ for(const row of both){assert.match(row.warning,/matches two/);assert.equal(row.unmatchedQuantity,'2 @ $3.17');}
+ const neither=parseReceipt('TEST SOAP $5.00\n-$1.00\n2 @ $3.17\nTEST RICE 1KG $7.00');
+ assert.equal(neither[0].qty,1);assert.equal(neither[1].qty,1);assert.ok(neither[0].warning);
+});
+
+test('discount quantity recovery stops at a heading, return line or sale notice',()=>{
+ for(const boundary of ['23-FROZEN','Final Sale','RETURNED PRODUCT -$1.14','Regular price $12.00']){
+  const rows=parseReceipt('TEST OATS 250G $9.51\n'+boundary+'\n3 @ $3.17\nTEST PEARS $4.00');
+  assert.equal(rows[0].qty,250);assert.equal(rows[1].qty,1);
+ }
+});
+
+test('a partial basket count never replaces the whole receipt count',()=>{
+ const text='TEST OATS $3.00\n*** BOB Count 1 ***\nTEST RICE $4.00\nSUBTOTAL $7.00';
+ const partial=auditReceipt(text);
+ assert.equal(partial.partialBasketCount,1);assert.equal(partial.productCount,undefined);assert.equal(partial.packCount,2);assert.deepEqual(partial.warnings,[]);
+ const whole=auditReceipt(text+'\nNumber of items: 2');
+ assert.equal(whole.partialBasketCount,1);assert.equal(whole.productCount,2);assert.deepEqual(whole.warnings,[]);
+ const missing=auditReceipt(text+'\nNumber of items: 3');
+ assert.match(missing.warnings[0],/3 purchased units/);
 });

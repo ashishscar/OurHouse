@@ -8,6 +8,7 @@ const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
 const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?\s*$`,'i');
+const bareDiscount=new RegExp(String.raw`^\s*(?:-\s*(?:${currency})?\s*\d+[.,]\d{2}|(?:${currency})?\s*\d+[.,]\d{2}\s*-)(?:\s*[A-Z*]{1,3})?\s*$`,'i');
 const num=s=>Number(String(s).replace(/\s/g,'').replace(',','.'));
 const rounded=n=>Math.round(n*1e6)/1e6;
 function measured(q,u){u=u.toLowerCase();return {qty:rounded(q*(u==='lb'||u==='lbs'?0.45359237:u==='oz'?28.349523125:1)),unit:unitMap[u]||'pcs'};}
@@ -36,37 +37,46 @@ function applyRate(row,rate){
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null,deferredRate=null;
+ let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null;
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
- function finishRate(next){
+ function finishRate(next,allowPrevious=true){
   if(!deferredRate)return;
-  const {rate,line,previous}=deferredRate;
-  const matches=next&&Math.abs(Number(next.amount)-num(rate[1])*Number(amount(rate[3])))<=.03;
-  if(matches){applyRate(next,rate);next.raw=line+'\n'+next.raw;}
-  else if(previous){previous.warning='A nearby quantity × unit price does not match the printed amount. Stock was left unchanged; check the photo.';previous.unmatchedQuantity=line;}
+  const {rate,line,previous,afterDiscount}=deferredRate,total=num(rate[1])*Number(amount(rate[3]));
+  const matches=next&&Math.abs(Number(next.amount)-total)<=.03;
+  const previousMatches=allowPrevious&&afterDiscount&&previous&&Math.abs(Number(previous.amount)-total)<=.03;
+  if(matches&&previousMatches){for(const row of [previous,next]){row.warning='A quantity line matches two nearby products. Stock was left unchanged; check the photo.';row.unmatchedQuantity=line;}}
+  else if(matches){applyRate(next,rate);next.raw=line+'\n'+next.raw;}
+  else if(previousMatches){applyRate(previous,rate);previous.raw+='\n'+line;}
+  else if(previous){previous.warning=afterDiscount?'A quantity line after a discount could not be assigned safely. Stock was left unchanged; check the photo.':'A nearby quantity × unit price does not match the printed amount. Stock was left unchanged; check the photo.';previous.unmatchedQuantity=line;}
   deferredRate=null;
  }
  function add(row){finishRate(row);rows.push(row);}
  for(const line of lines){
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
-  if(/^final\s+sale\b/i.test(line)){finishRate();pending=null;pendingDraft=null;last=null;continue;}
+  if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate();pending=null;pendingDraft=null;last=null;continue;}
   const discount=discountPrice(line),positive=discount&&line.replace(/\s*-\s*[$₹£€]?\s*\d+[.,]\d{2}(?:\s*[A-Z*]{1,3})?\s*$/i,'').match(ratePattern);
-  if(discount&&!positive){pending=null;pendingDraft=null;last=null;continue;}
+  // A coupon may be printed between a product and its count/rate. Hold a
+  // candidate only across explicit discount metadata, then compare both nearby
+  // product totals before assigning stock. Matching both is ambiguous.
+  if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
+  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
   // A count @ unit price is a continuation, even when its last decimal looks
   // like a line total. Test the full line before removing the trailing price.
   const rate=body.match(ratePattern)||(!priced?.body?.match(ratePattern)?line.match(ratePattern):null);
   if(rate){
-   if(!pending&&!body.match(ratePattern)&&(!last?.amount||Math.abs(Number(last.amount)-num(rate[1])*Number(amount(rate[3])))>.03)){finishRate();deferredRate={rate,line,previous:last};continue;}
+   if(beforeDiscount&&!pending&&!body.match(ratePattern)){finishRate(undefined,false);deferredRate={rate,line,previous:beforeDiscount,afterDiscount:true};beforeDiscount=null;continue;}
+   beforeDiscount=null;
+   if(!pending&&!body.match(ratePattern)&&(!last?.amount||Math.abs(Number(last.amount)-num(rate[1])*Number(amount(rate[3])))>.03)){finishRate(undefined,false);deferredRate={rate,line,previous:last};continue;}
    const repeated=!pending&&last?.unitPrice&&priced&&body.match(ratePattern),row=pending?(pendingDraft||{...quantity(pending),raw:pending}):repeated?{...quantity(last.name),itemNumber:last.itemNumber,raw:last.name}:last;
    if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+line;if(pending){if(row.amount&&validName(row.name))add(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
    if(repeated&&row?.amount&&validName(row.name))add(row);
    if(row?.amount){pending=null;pendingDraft=null;}continue;
   }
+  beforeDiscount=null;
   if(!priced&&pending&&new RegExp('^'+measurement.source+'$','i').test(line)){pending+=' '+line;continue;}
   if(!priced&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(line)){pending=line;pendingDraft=null;continue;}
   const q=quantity(body);
@@ -83,7 +93,7 @@ export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(r
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}
 export function auditReceipt(text,items=pantryReceipt(text)){
  const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,purchaseDone=false;
- for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const m=line.match(/(?:number\s+of\s+(?:products|items)|items?\s+(?:sold|count)|bob\s+count)\s*[:=]?\s*(\d{1,4})\b/i);if(m)footer.productCount=Number(m[1]);}
+ for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const m=line.match(/(?:number\s+of\s+(?:products|items)|items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\b/i);if(m)footer.productCount=Number(m[1]);const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
  const netSum=rounded(itemSum-discounts);
