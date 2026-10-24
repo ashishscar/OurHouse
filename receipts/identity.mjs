@@ -18,6 +18,9 @@ export function supportedName(proposed,receiptName){
  return true;
 }
 const qualifiersOnly=new Set('blue black red green brown white yellow pink grey gray gold silver original organic frozen raw whole split ground sliced chopped skim skimmed unsalted salted sweet spicy plain fine nylon'.split(' '));
+// Product types follow their flavour/ingredient in a completed display name
+// (for example, mango chutney). Qualifiers such as organic stay in front.
+const typeSuffixWords=new Set('rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel bag lighter plier tool foil bleach sanitizer sponge broom mop'.split(' '));
 export function qualifiedReceiptName(proposed,receiptName){
  if(typeof proposed!=='string')return '';
  const source=words(receiptName),candidate=words(proposed),actual=new Set(candidate);
@@ -27,8 +30,10 @@ export function qualifiedReceiptName(proposed,receiptName){
  if(!receiptSection(proposed)||!candidate.length||candidate.some(w=>!source.includes(w)&&!['and','with','of'].includes(w)))return '';
  const missing=[...new Set(source.filter(w=>(protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(w))&&!actual.has(w)))].sort((a,b)=>Number(/percent$/.test(b))-Number(/percent$/.test(a)));
  const display=w=>w.replace(/decimal(\d+)percent$/,'.$1%').replace(/percent$/,'%');
- const prefix=missing.map(display).join(' ').replace(/\p{L}/u,c=>c.toUpperCase());
- const completed=[prefix,proposed.trim()].filter(Boolean).join(' ');
+ const typeWord=w=>typeSuffixWords.has(w)||typeSuffixWords.has(w.replace(/s$/,''));
+ const prefix=missing.filter(w=>!typeWord(w)).map(display).join(' ').replace(/\p{L}/u,c=>c.toUpperCase());
+ const suffix=missing.filter(typeWord).map(display).join(' ');
+ const completed=[prefix,proposed.trim(),suffix].filter(Boolean).join(' ');
  // Complete a grounded suggestion only from qualifiers already in the print.
  // New identities, amounts and measurements are never supplied here.
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';

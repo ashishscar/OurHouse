@@ -29,6 +29,16 @@ test('unsupported, conflicting or unbound name suggestions keep the receipt labe
  for(const labels of [[],[{source:'TEST BRAND BLUE $2.00',name:'Paper towels',section:'household'}],[{source:'OTHER LABEL $2.00',name:'Blue',section:'pantry'}],[{source:'TEST BRAND BLUE $2.00',name:'Blue',section:'household'},{source:'TEST BRAND BLUE $2.00',name:'TEST BRAND BLUE',section:'household'}]])assert.equal(identifyReceiptItems(rows,labels)[0].name,'TEST BRAND BLUE');
  const clear=identifyReceiptItems([{name:'TEST BRAND SOAP',raw:'TEST BRAND SOAP $2.00'}],[{source:'TEST BRAND SOAP $2.00',name:'Soap',section:'pantry'}])[0];assert.equal(clear.section,'household');assert.equal(clear.name,'Soap');assert.equal(clear.receiptName,'TEST BRAND SOAP');
 });
+test('grounded name completion puts missing product types after their ingredient or flavour',()=>{
+ assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY MANGO'),'Mango chutney');
+ assert.equal(qualifiedReceiptName('Tomato','TEST BRAND KETCHUP TOMATO'),'Tomato ketchup');
+ assert.equal(qualifiedReceiptName('Tomato','TEST BRAND ORGANIC KETCHUP TOMATO'),'Organic Tomato ketchup');
+ const row={name:'TEST BRAND CHUTNEY MANGO',raw:'TEST BRAND CHUTNEY MANGO $6.25',qty:2,unit:'pcs',amount:'6.25'};
+ const result=identifyReceiptItems([row],[{source:row.raw,name:'Mango',section:'pantry'}])[0];
+ assert.equal(result.name,'Mango chutney');
+ assert.deepEqual([result.raw,result.qty,result.unit,result.amount],[row.raw,row.qty,row.unit,row.amount]);
+ assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
+});
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
  for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner'])assert.equal(receiptSection(name),'household');
