@@ -28,9 +28,11 @@ def main():
     import mlx.core as mx
     from mlx_vlm import load, stream_generate
     from mlx_vlm.prompt_utils import apply_chat_template
+    from mllama_compat import install_text_only_cross_attention_fix
 
     mx.set_memory_limit(18 * 1024**3)
     mx.set_cache_limit(1024**3)
+    install_text_only_cross_attention_fix()
     model, processor = load(str(args.model), adapter_path=str(args.adapter) if args.adapter else None)
     model.eval()
     examples = [json.loads(line) for line in args.data.read_text().splitlines() if line.strip()]

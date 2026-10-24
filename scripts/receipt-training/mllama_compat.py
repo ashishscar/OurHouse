@@ -36,3 +36,34 @@ def install_causal_padding_fix():
 
     forward._ourhouse_causal_bridge = True
     Model.__call__ = forward
+
+
+def install_text_only_cross_attention_fix():
+    """Skip vision-only layers when neither an image nor its cache is present.
+
+    MLX-VLM 0.7.10 otherwise splits text queries into fake image keys/values.
+    That path can leak future text and fails on odd sequence lengths. Mllama's
+    reference text-only path skips the entire cross-attention decoder layer:
+    https://github.com/huggingface/transformers/blob/main/src/transformers/models/mllama/modeling_mllama.py
+    Apply during both training and inference; cached image decoding still runs.
+    """
+    if version("mlx-vlm") != "0.7.10":
+        raise ValueError("Re-review the text-only bridge for this MLX-VLM version")
+    from mlx_vlm.models.mllama.language import MllamaCrossAttentionDecoderLayer
+    if getattr(MllamaCrossAttentionDecoderLayer.__call__, "_ourhouse_text_only_bridge", False):
+        return
+    original = MllamaCrossAttentionDecoderLayer.__call__
+
+    @wraps(original)
+    def forward(self, hidden_states, cross_attention_states=None,
+                attention_mask=None, full_text_row_masked_out_mask=None, cache=None):
+        offset = getattr(cache, "offset", 0)
+        if hasattr(offset, "max"):
+            offset = offset.max().item()
+        if cross_attention_states is None and offset == 0:
+            return hidden_states
+        return original(self, hidden_states, cross_attention_states, attention_mask,
+                        full_text_row_masked_out_mask, cache)
+
+    forward._ourhouse_text_only_bridge = True
+    MllamaCrossAttentionDecoderLayer.__call__ = forward

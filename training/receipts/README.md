@@ -91,6 +91,13 @@ the version-scoped causal bridge in `mllama_compat.py`. Run
 `python scripts/receipt-training/test_causality.py` before training: modifying a
 future synthetic token must not change earlier hidden states. Runs without this
 bridge have invalid training losses and must not be used as candidates.
+The same version's text-only path also runs vision decoder layers without image
+states. For a separate naming task with no image, both local runners skip these
+layers unless a populated vision cache is supplied, following the reference
+Mllama text-only behavior. The synthetic checks cover odd sequence lengths,
+future-token isolation and preservation of image/cached-image cross-attention.
+Verify mixed image/text batches through the actual trainer runtime before a run;
+passing preparation alone does not establish valid forward/backward execution.
 The runner also checks each loss and gradient for finite values before the
 optimizer runs and clips the global gradient norm to 1. Run
 `python scripts/receipt-training/test_numerics.py` to verify these checks. Stop and
