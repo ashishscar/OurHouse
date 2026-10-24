@@ -23,6 +23,12 @@ class TwoStageTest(unittest.TestCase):
         prepared, labels = prepare_entries({"entries": [["TOTAL WHOLEGRAIN CEREAL", "3.87", ""]]})
         self.assertEqual(labels, [[0, "TOTAL WHOLEGRAIN CEREAL"]])
 
+    def test_percentage_before_tax_label_remains_metadata(self):
+        prepared, labels = prepare_entries({"entries": [["13% HST", "0.39", ""]]})
+        self.assertEqual(labels, [])
+        self.assertEqual(join_names(prepared, labels, {"labels": []}),
+                         {"rows": [["13% HST", "0.39", "", "", "x"]]})
+
     def test_rejects_malformed_field_rows_without_repair(self):
         for entry in [["Oats", "$2.31", ""], ["Oats", "", ""],
                       ["Oats", "2.31", "", "Oats"], ["Coupon", "--1.10", ""],

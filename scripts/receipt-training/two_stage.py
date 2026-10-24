@@ -28,7 +28,7 @@ def _metadata(label, amount):
         return "s", amount
     if upper == "TOTAL":
         return "t", amount
-    if re.fullmatch(r"(?:H[ -])?(?:HST|GST|PST|QST|TAX)(?:\s+[\d.]+%?)?", upper):
+    if re.fullmatch(r"(?:[\d.]+%\s+)?(?:H[ -])?(?:HST|GST|PST|QST|TAX)(?:\s+[\d.]+%?)?", upper):
         return "x", amount
     if re.fullmatch(r"(?:NUMBER\s+OF\s+(?:PRODUCTS|ITEMS)|ITEM\s+COUNT)\s*:?", upper):
         return "c", amount
