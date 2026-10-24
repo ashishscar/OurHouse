@@ -150,3 +150,31 @@ size before upload. Verify hosted inference separately from local inference.
 An untested adapter, a faster incomplete result or an improvement only on training
 photos must not replace the production scanner. Existing exact-build, isolation,
 idempotency, clean-source and rollback release gates still apply.
+
+### Experimental separate naming task
+
+`infer_two_stage.py` benchmarks a separately trained three-field vision task and
+text-only naming task with the same local model. Its private prompt file contains
+`fields` and `names` instructions. Vision returns
+`{"entries":[[printed_label,line_total,quantity_line],...]}`; naming receives only
+the actual predicted product labels and returns indexed names/sections. The
+strict join preserves every purchase and its literal amount/quantity. It rejects
+missing/duplicate naming indices, malformed prices and ambiguous metadata.
+Identical printed labels share a naming request, never a purchase record.
+
+Use an original five-field reference split with this runner and score its output
+with the same independent evaluator above. Reference answers are never model
+inputs. A naming component test given correct reference labels is an oracle
+diagnostic only; it cannot establish extraction accuracy. Combined generation
+time includes both calls and failed responses. This experiment has no app route
+and does not approve a model or demonstrate phone/hosted performance.
+
+```sh
+python scripts/receipt-training/test_two_stage.py
+python scripts/receipt-training/infer_two_stage.py \
+  --model work/receipt-training/base-model \
+  --adapter work/receipt-training/adapters/candidate \
+  --data work/receipt-training/reviewed-whole-receipts/valid.jsonl \
+  --prompts work/receipt-training/two-stage-prompts.private.json \
+  --output work/receipt-training/two-stage-valid.jsonl
+```
