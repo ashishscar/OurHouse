@@ -32,6 +32,34 @@ class SpatialOCRTests(unittest.TestCase):
                          ("$4.00", quad(200, 68, 40, slope=.2))])
         self.assertEqual(assemble(source)["lines"], ["APPLES $2.00", "PEARS $4.00"])
 
+    def test_curved_page_uses_both_observed_column_angles(self):
+        def curved(x, baseline, width):
+            centre = x + width / 2
+            slope = .001 * (centre - 100)
+            y = baseline + .0005 * (centre - 100) ** 2
+            return quad(x, y - slope * width / 2, width, 8, slope)
+        source = record([("APPLES", curved(0, 0, 90)),
+                         ("PEARS", curved(0, 14, 90)),
+                         ("$2.00", curved(200, 0, 40)),
+                         ("$4.00", curved(200, 14, 40))])
+        result = assemble(source)
+        self.assertEqual(result['lines'], ['APPLES $2.00', 'PEARS $4.00'])
+        self.assertEqual(result['unmatched'], [])
+        self.assertEqual(result['ambiguous'], [])
+
+    def test_printed_arithmetic_supports_only_nearby_observed_amounts(self):
+        source = record([('2 @ $1.25', quad(0, 0)), ('OATS', quad(0, 8)),
+                         ('$2.50', quad(200, 6, 40))])
+        result = assemble(source)
+        self.assertIn('2 @ $1.25 $2.50', result['lines'])
+        self.assertIn('OATS', result['lines'])
+        distant = assemble(record([('2 @ $1.25', quad(0, 0)),
+                                    ('$2.50', quad(200, 40, 40))]))
+        self.assertEqual(distant['unmatched'], [1])
+        unexplained = assemble(record([('2 @ $1.25', quad(0, 0)),
+                                       ('-$2.50', quad(200, 0, 40))]))
+        self.assertEqual(unexplained['unmatched'], [1])
+
     def test_discount_does_not_consume_next_product(self):
         source = record([("APPLES", quad(0, 0)), ("2 FOR $4.00", quad(0, 20)),
                          ("BANANAS", quad(0, 34)), ("-$1.00", quad(200, 34, 40)),

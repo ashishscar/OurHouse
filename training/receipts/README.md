@@ -183,7 +183,10 @@ python scripts/receipt-training/infer_two_stage.py \
 
 The private OCR control separates detected quadrilaterals, literal character
 recognition, spatial ordering and semantic naming. `ocr_layout.py` joins rows by
-their local text baseline and an ordered amount assignment. Negative amounts
+the two observed column baselines and an ordered amount assignment. Averaging
+the label and amount tangents accounts for a page curving across the gap. A
+printed count/rate may support a nearby observed amount when the arithmetic
+agrees; it cannot create an amount or reach outside the spatial bound. Negative amounts
 attach only to explicit promotion text. Ambiguous/unmatched amounts stay in the
 output and diagnostics. Numeric identifier-only boxes remain available in the
 input and are listed separately when omitted from the assembled text. Repeated

@@ -2,6 +2,7 @@
 import math
 import statistics
 import re
+from decimal import Decimal, InvalidOperation
 
 
 def assemble(record, threshold=1.5, margin=0.25):
@@ -88,6 +89,9 @@ def _assemble(record, threshold=1.5, margin=0.25):
     for i, row in enumerate(rows):
         a = row['rep']
         text = ' '.join((b['text'] for b in sorted(row['members'], key=lambda b: b['x'])))
+        rate = re.search(r'(\d+(?:[.,]\d{1,3})?)\s*(?:kg|lbs?|g|ml|l|each|pcs?)?\s*@\s*[$]?\s*(\d+[.,]\d{2})(?:\s*(?:per\s*(?:1\s*)?(?:kg|lbs?|g|ml|l)|/(?:kg|lbs?|g|ml|l)|ea[.]?))?\s*$', text, re.I)
+        rate_total = (Decimal(rate[1].replace(',', '.')) * Decimal(rate[2].replace(',', '.'))
+                      if rate else None)
         has_amount = bool(re.search('\\d+[.,]\\d{2}\\s*[A-Z*]{0,3}$', text) and '@' not in text)
         for j, price in enumerate(prices):
             negative = bool(re.search('[-−]', price['text']))
@@ -96,10 +100,25 @@ def _assemble(record, threshold=1.5, margin=0.25):
                 continue
             if has_amount and (not (negative and promotion)):
                 continue
-            d = abs(price['y'] - a['y'] - a['slope'] * (price['x'] - a['x'])) / max(1, (a['h'] + price['h']) / 2)
+            # A curved page can tilt its left and right columns differently.
+            # Integrate the two observed local baselines across the gap rather
+            # than extending only the label's tangent into the price column.
+            slope = (a['slope'] + price['slope']) / 2
+            d = abs(price['y'] - a['y'] - slope * (price['x'] - a['x'])) / max(1, (a['h'] + price['h']) / 2)
             bound = 3.0 if negative and promotion else threshold
             if d <= bound:
                 weights[i][j] = 4 - d if negative else 3 - d
+                # Printed arithmetic supports an existing spatial edge only.
+                # It never creates a price, reaches beyond the spatial bound,
+                # or assigns a negative promotion amount to a purchase.
+                numeric = re.search(r'\d+[.,]\d{2}', price['text'])
+                if not negative and rate_total is not None and numeric:
+                    try:
+                        observed = Decimal(numeric[0].replace(',', '.'))
+                        if abs(observed - rate_total) <= Decimal('.03'):
+                            weights[i][j] += 2
+                    except InvalidOperation:
+                        pass
                 distances[i][j] = d
     forward = [[0.0] * (m + 1) for _ in range(n + 1)]
     backward = [[0.0] * (m + 1) for _ in range(n + 1)]
