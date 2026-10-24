@@ -2,6 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseReceipt,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 
+test('hyphenated stock numbers stay separate from names and measurements',()=>{
+ const rows=parseReceipt('527-8910-2 TEST STORAGE BOX $7.25\n3 638-1029-4 TEST TOWEL $9.00');
+ assert.deepEqual(rows.map(({name,itemNumber,qty,unit,amount})=>({name,itemNumber,qty,unit,amount})),[
+  {name:'TEST STORAGE BOX',itemNumber:'527-8910-2',qty:1,unit:'pcs',amount:'7.25'},
+  {name:'TEST TOWEL',itemNumber:'638-1029-4',qty:3,unit:'pcs',amount:'9.00'},
+ ]);
+ const other=parseReceipt('2026-10-24 TEST NOTE $1.00\n555-010-1234 TEST CONTACT $2.00');
+ assert.equal(other[0].itemNumber,undefined);assert.ok(other[0].name.startsWith('2026-10-24'));
+ assert.equal(other[1].itemNumber,undefined);assert.ok(other[1].name.startsWith('555-010-1234'));
+});
+
+test('a wrapped package size below the current priced product adds stock without changing price',()=>{
+ const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
+ assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
+  {name:'TEST CRACKERS',qty:400,unit:'g',packCount:1,amount:'3.49'},
+  {name:'TEST OATS',qty:750,unit:'g',packCount:3,amount:'6.00'},
+ ]);
+ assert.equal(rows[0].raw,'TEST CRACKERS $3.49\n400G');
+ const conflict=parseReceipt('TEST MILK 2L $6.00\n1L')[0];
+ assert.equal(conflict.qty,2);assert.equal(conflict.unit,'L');assert.match(conflict.warning,/conflicts/);assert.equal(conflict.unmatchedQuantity,'1L');
+ const separated=parseReceipt('TEST SOAP $2.00\nDiscount -$0.25\n400G\nTEST PEARS $3.00');
+ assert.equal(separated[0].qty,1);assert.equal(separated[1].qty,1);
+});
+
 test('receipt prices and tax flags never become product names or pantry quantities',()=>{
  const rows=pantryReceipt('FAMILY MARKET\n123 Main Street\n123456 MILK 2L    $5.99 F\nBASMATI RICE 5 kg  18.49H\nBREAD 3.49 A\nSUBTOTAL 27.97\nHST 1.20\nTOTAL 29.17\nVISA 29.17\nTHANK YOU');
  assert.deepEqual(rows.map(({name,qty,unit,amount,quantityKnown,pick})=>({name,qty,unit,amount,quantityKnown,pick})),[

@@ -178,3 +178,42 @@ python scripts/receipt-training/infer_two_stage.py \
   --prompts work/receipt-training/two-stage-prompts.private.json \
   --output work/receipt-training/two-stage-valid.jsonl
 ```
+
+### Experimental small OCR recognizer
+
+The private OCR control separates detected quadrilaterals, literal character
+recognition, spatial ordering and semantic naming. `ocr_layout.py` joins rows by
+their local text baseline and an ordered amount assignment. Negative amounts
+attach only to explicit promotion text. Ambiguous/unmatched amounts stay in the
+output and diagnostics. Numeric identifier-only boxes remain available in the
+input and are listed separately when omitted from the assembled text. Repeated
+purchases are never deduplicated by name. This module has no app route.
+
+`ctc.py` supports supervised recognition using an inference-only CTC network. It
+keeps batch normalization/dropout in evaluation mode and returns logits through
+the same recognition layers, avoiding an absent auxiliary training head. It
+rejects blank/unknown target tokens, impossible repeated-letter alignment,
+nonfinite losses and nonfinite gradients before optimizer advancement. A
+nonfinite post-update weight invalidates that update and checkpoint.
+
+Before training, visually check each exact crop against independently annotated
+printed text. Exclude incomplete crops and crops containing unlabelled adjacent
+text. Label-only fine-tuning can degrade amounts and quantities: compare a
+balanced set of independently checked labels, prices, signs, tax affixes and
+quantity lines. Teacher predictions are not ground truth. Keep whole-source
+validation/test separation. Verify a trained export against the exact training
+runtime across batch sizes and input widths; similarly named vendor Torch/ONNX
+checkpoints must not be assumed numerically identical.
+
+Literal OCR and spatial checks do not establish short-name/category accuracy,
+metadata fidelity, phone latency or production readiness. Preserve failed
+receipts and run the complete independent evaluator and release gates before
+integration. Learned checkpoints and private review sheets remain in ignored
+`work/`, including exported ONNX files; publishing client weights needs separate
+review because a downloadable model distributes the learned weights.
+
+```sh
+python scripts/receipt-training/test_ocr_layout.py
+# Only in an explicitly prepared local PyTorch environment:
+python scripts/receipt-training/test_ctc.py
+```

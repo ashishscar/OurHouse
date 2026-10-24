@@ -18,14 +18,14 @@ function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\
 function quantity(body){
  let name=body.replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ)\s*$/i,''),count=1,known=false;
  const inline=name.match(new RegExp(ratePattern.source.replace('^\\s*','(?:^|\\s)'),'i'));if(inline)name=name.slice(0,inline.index).trim();
- const counted=name.match(/^(\d{1,3})\s+(\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×]\s*/i);
+ const counted=name.match(/^(\d{1,3})\s+(\d{3}-\d{4}-\d|\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×]\s*/i);
  if(counted){count=Number(counted[1]);name=name.slice(counted[1].length).trim();known=true;}
  if(lead){count=Number(lead[1]);name=name.slice(lead[0].length);known=true;}
- const itemNumber=name.match(/^(\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i')),weight=multi?null:name.match(measurement);
+ const itemNumber=name.match(/^(\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i')),weight=multi?null:name.match(measurement);
  if(multi){count*=Number(multi[1]);known=true;}
  let value={qty:count,unit:'pcs'};if(weight){value=measured(num(weight[1])*count,weight[2]);name=name.replace(weight[0],' ').trim();known=true;}
  if(multi){value=measured(num(multi[2])*count,multi[3]);name=name.replace(multi[0],' ').trim();}
- name=name.replace(/^\s*\d{3,14}\s+/,'').replace(/[*#_]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').trim().replace(/\s+(?:H?MRJ)\s*$/i,'');
+ name=name.replace(/^\s*(?:\d{3}-\d{4}-\d|\d{3,14})\s+/,'').replace(/[*#_]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').trim().replace(/\s+(?:H?MRJ)\s*$/i,'');
  const row={name,...value,quantityKnown:known,packCount:multi?1:count,...(multi?{packSize:num(multi[2])*Number(multi[1]),packUnit:multi[3].toLowerCase(),quantityDetail:multi[1]+' × '+multi[2]+' '+multi[3]}:weight?{packSize:num(weight[1]),packUnit:weight[2].toLowerCase()}:{}),...(itemNumber?{itemNumber}:{})};return inline?applyRate(row,inline):row;
 }
 function validName(name,explicitPrice=false){return name.length>=2&&name.length<=80&&/\p{L}{2}/u.test(name)&&!noise.test(name)&&!/(?:instant\s+savings|coupon|discount)\b/i.test(name)&&!/(?:[$₹£€]|\bRs\.?\s*\d)/i.test(name)&&(explicitPrice||!/\d+[.,]\d{2}(?:\s|$)/.test(name));}
@@ -88,6 +88,14 @@ export function parseReceipt(text){
   }
   beforeDiscount=null;
   if(!priced&&pending&&new RegExp('^'+measurement.source+'$','i').test(line)){pending+=' '+line;continue;}
+  // Some tills wrap the pack size below an already priced label. It is stock
+  // evidence only while that product remains current and has no package size.
+  const packContinuation=!priced&&!pending&&line.match(new RegExp('^'+measurement.source+'$','i'));
+  if(packContinuation&&last){
+   if(last.packSize||!['pcs','packet'].includes(last.unit)){last.warning='A separate package size conflicts with an existing measurement. Stock was left unchanged; check the photo.';last.unmatchedQuantity=line;}
+   else {const size=num(packContinuation[1]),unit=packContinuation[2].toLowerCase(),count=last.packCount||1;Object.assign(last,measured(size*count,unit),{packSize:size,packUnit:unit,quantityKnown:true,quantityDetail:count+' packs × '+size+' '+unit});last.raw+='\n'+line;}
+   continue;
+  }
   if(!priced&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(line)){pending=line;pendingDraft=null;continue;}
   const q=quantity(body);
   if(priced&&pending&&!pendingDraft&&!q.itemNumber&&(/^\d{4,14}\s/.test(pending)||/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)||!validName(q.name))){const joined=quantity(pending+' '+body);if(validName(joined.name)){const row={...joined,amount:priced.amount,raw:pending+'\n'+line};add(row);last=row;pending=null;continue;}}
