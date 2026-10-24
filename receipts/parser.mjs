@@ -1,4 +1,5 @@
 // Structured receipt drafts: never use a monetary amount as stock quantity.
+import {printedReceiptCount} from './metadata.mjs';
 const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
 const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}\d{0,2})?$`,'i');
@@ -18,22 +19,32 @@ function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\
 function quantity(body){
  let name=body.replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ)\s*$/i,''),count=1,known=false;
  const inline=name.match(new RegExp(ratePattern.source.replace('^\\s*','(?:^|\\s)'),'i'));if(inline)name=name.slice(0,inline.index).trim();
- const counted=name.match(/^(\d{1,3})\s+(\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×]\s*/i);
+ const counted=name.match(/^(\d{1,3})\s+(\d{3}-\d{4}-\d|\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×]\s*/i);
  if(counted){count=Number(counted[1]);name=name.slice(counted[1].length).trim();known=true;}
  if(lead){count=Number(lead[1]);name=name.slice(lead[0].length);known=true;}
- const itemNumber=name.match(/^(\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i')),weight=multi?null:name.match(measurement);
+ const itemNumber=name.match(/^(\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i')),weight=multi?null:name.match(measurement);
  if(multi){count*=Number(multi[1]);known=true;}
  let value={qty:count,unit:'pcs'};if(weight){value=measured(num(weight[1])*count,weight[2]);name=name.replace(weight[0],' ').trim();known=true;}
  if(multi){value=measured(num(multi[2])*count,multi[3]);name=name.replace(multi[0],' ').trim();}
- name=name.replace(/^\s*\d{3,14}\s+/,'').replace(/[*#_]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').trim().replace(/\s+(?:H?MRJ)\s*$/i,'');
+ name=name.replace(/^\s*(?:\d{3}-\d{4}-\d|\d{3,14})\s+/,'').replace(/[*#_]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').trim().replace(/\s+(?:H?MRJ)\s*$/i,'');
  const row={name,...value,quantityKnown:known,packCount:multi?1:count,...(multi?{packSize:num(multi[2])*Number(multi[1]),packUnit:multi[3].toLowerCase(),quantityDetail:multi[1]+' × '+multi[2]+' '+multi[3]}:weight?{packSize:num(weight[1]),packUnit:weight[2].toLowerCase()}:{}),...(itemNumber?{itemNumber}:{})};return inline?applyRate(row,inline):row;
 }
-function validName(name){return name.length>=2&&name.length<=80&&/\p{L}{2}/u.test(name)&&!noise.test(name)&&!/(?:instant\s+savings|coupon|discount)\b/i.test(name)&&!/(?:[$₹£€]|\bRs\.?\s*\d|\d+[.,]\d{2}(?:\s|$))/i.test(name);}
+function validName(name,explicitPrice=false){return name.length>=2&&name.length<=80&&/\p{L}{2}/u.test(name)&&!noise.test(name)&&!/(?:instant\s+savings|coupon|discount)\b/i.test(name)&&!/(?:[$₹£€]|\bRs\.?\s*\d)/i.test(name)&&(explicitPrice||!/\d+[.,]\d{2}(?:\s|$)/.test(name));}
 function applyRate(row,rate){
  const count=num(rate[1]),u=rate[2]?.toLowerCase();
  if(u){Object.assign(row,measured(count,u));row.packCount=['ea','pcs','pc','each'].includes(u)?count:1;row.quantityDetail=rate[1]+' '+u;}
  else {row.packCount=count;if(row.packSize){Object.assign(row,measured(row.packSize*count,row.packUnit));row.quantityDetail=count+' packs × '+row.packSize+' '+row.packUnit;}else{row.qty=count;row.unit='pcs';row.quantityDetail=count+' items';}}
  row.quantityKnown=true;row.unitPrice=amount(rate[3]);row.rateQuantity=count;return row;
+}
+// Structured readers supply the price separately: a decimal in the printed
+// label is then evidence, not another price column to guess at.
+export function parseReceiptFields({label,amount:price,quantityLine=''}){
+ if(typeof label!=='string'||label.length>160||/[\u0000-\u001f<>]/.test(label)||typeof price!=='string'||!/^\d{1,7}\.\d{2}$/.test(price)||typeof quantityLine!=='string'||quantityLine.length>160||/[\u0000-\u001f<>]/.test(quantityLine))throw Error('Invalid receipt fields');
+ const row={...quantity(label.trim()),amount:price,raw:label.trim()+' $'+price+(quantityLine?'\n'+quantityLine:'')};
+ if(!validName(row.name,true))throw Error('Invalid receipt product label');
+ if(quantityLine){const rate=quantityLine.match(ratePattern);if(rate)applyRate(row,rate);else row.warning='The printed quantity line was not understood. Check the photo before selecting this product.';}
+ if(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice))>.03)row.warning='The quantity × unit price does not match this product amount. Check the photo before selecting it.';
+ return row;
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
@@ -78,6 +89,14 @@ export function parseReceipt(text){
   }
   beforeDiscount=null;
   if(!priced&&pending&&new RegExp('^'+measurement.source+'$','i').test(line)){pending+=' '+line;continue;}
+  // Some tills wrap the pack size below an already priced label. It is stock
+  // evidence only while that product remains current and has no package size.
+  const packContinuation=!priced&&!pending&&line.match(new RegExp('^'+measurement.source+'$','i'));
+  if(packContinuation&&last){
+   if(last.packSize||!['pcs','packet'].includes(last.unit)){last.warning='A separate package size conflicts with an existing measurement. Stock was left unchanged; check the photo.';last.unmatchedQuantity=line;}
+   else {const size=num(packContinuation[1]),unit=packContinuation[2].toLowerCase(),count=last.packCount||1;Object.assign(last,measured(size*count,unit),{packSize:size,packUnit:unit,quantityKnown:true,quantityDetail:count+' packs × '+size+' '+unit});last.raw+='\n'+line;}
+   continue;
+  }
   if(!priced&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(line)){pending=line;pendingDraft=null;continue;}
   const q=quantity(body);
   if(priced&&pending&&!pendingDraft&&!q.itemNumber&&(/^\d{4,14}\s/.test(pending)||/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)||!validName(q.name))){const joined=quantity(pending+' '+body);if(validName(joined.name)){const row={...joined,amount:priced.amount,raw:pending+'\n'+line};add(row);last=row;pending=null;continue;}}
@@ -93,7 +112,7 @@ export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(r
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}
 export function auditReceipt(text,items=pantryReceipt(text)){
  const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,purchaseDone=false;
- for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const m=line.match(/(?:number\s+of\s+(?:products|items)|items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\b/i);if(m)footer.productCount=Number(m[1]);const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
+ for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
  const netSum=rounded(itemSum-discounts);

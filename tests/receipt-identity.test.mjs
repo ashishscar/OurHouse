@@ -1,15 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {identifyReceiptItems,receiptSection,supportedName} from '../receipts/identity.mjs';
+import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
 });
+test('decimal fat percentages cannot become a different percentage during name shortening',()=>{
+ assert.equal(supportedName('3.25% Milk','TEST BRAND MILK 3.25%'),true);
+ for(const name of ['25% Milk','3% Milk','Milk'])assert.equal(supportedName(name,'TEST BRAND MILK 3.25%'),false);
+ assert.equal(qualifiedReceiptName('Milk','TEST BRAND MILK 3.25%'),'3.25% Milk');
+ assert.equal(qualifiedReceiptName('25% Milk','TEST BRAND MILK 3.25%'),'');
+});
+test('short names recover only qualifiers printed on the same product and keep opaque labels',()=>{
+ assert.equal(qualifiedReceiptName('Cashews','TEST BRAND SPLIT CASHEWS 500G'),'Split Cashews');
+ assert.equal(qualifiedReceiptName('Green peas','TEST BRAND ORGANIC GREEN PEAS 1KG'),'Organic Green peas');
+ assert.equal(qualifiedReceiptName('Cream','TEST BRAND WHIPPING CREAM 35%'),'35% Whipping Cream');
+ for(const name of ['Frozen peas','Whole rice','Paper towels','Blue'])assert.equal(qualifiedReceiptName(name,'TEST BRAND BLUE'),'');
+ const row={name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'};
+ assert.equal(identifyReceiptItems([row],[{source:row.raw,name:'Blue',section:'unknown'}])[0].name,row.name);
+ const cream={name:'TEST BRAND WHIPPING CREAM 35%',raw:'TEST BRAND WHIPPING CREAM 35% $4.00',qty:2,unit:'kg',amount:'4.00'};
+ const named=identifyReceiptItems([cream],[{source:cream.raw,name:'Cream',section:'pantry'}])[0];
+ assert.equal(named.name,'35% Whipping Cream');assert.equal(named.receiptName,cream.name);
+ assert.equal(named.qty,2);assert.equal(named.unit,'kg');assert.equal(named.amount,'4.00');assert.equal(named.raw,cream.raw);
+});
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];
  for(const labels of [[],[{source:'TEST BRAND BLUE $2.00',name:'Paper towels',section:'household'}],[{source:'OTHER LABEL $2.00',name:'Blue',section:'pantry'}],[{source:'TEST BRAND BLUE $2.00',name:'Blue',section:'household'},{source:'TEST BRAND BLUE $2.00',name:'TEST BRAND BLUE',section:'household'}]])assert.equal(identifyReceiptItems(rows,labels)[0].name,'TEST BRAND BLUE');
  const clear=identifyReceiptItems([{name:'TEST BRAND SOAP',raw:'TEST BRAND SOAP $2.00'}],[{source:'TEST BRAND SOAP $2.00',name:'Soap',section:'pantry'}])[0];assert.equal(clear.section,'household');assert.equal(clear.name,'Soap');assert.equal(clear.receiptName,'TEST BRAND SOAP');
+});
+test('grounded name completion puts missing product types after their ingredient or flavour',()=>{
+ assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY MANGO'),'Mango chutney');
+ assert.equal(qualifiedReceiptName('Tomato','TEST BRAND KETCHUP TOMATO'),'Tomato ketchup');
+ assert.equal(qualifiedReceiptName('Tomato','TEST BRAND ORGANIC KETCHUP TOMATO'),'Organic Tomato ketchup');
+ const row={name:'TEST BRAND CHUTNEY MANGO',raw:'TEST BRAND CHUTNEY MANGO $6.25',qty:2,unit:'pcs',amount:'6.25'};
+ const result=identifyReceiptItems([row],[{source:row.raw,name:'Mango',section:'pantry'}])[0];
+ assert.equal(result.name,'Mango chutney');
+ assert.deepEqual([result.raw,result.qty,result.unit,result.amount],[row.raw,row.qty,row.unit,row.amount]);
+ assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
  for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water'])assert.equal(receiptSection(name),'kitchen');

@@ -1,7 +1,7 @@
 // Suggestions never replace source evidence, quantities or prices. Unknown
 // identities keep the printed label; a section remains editable before import.
 const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
-const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d)\s*%/g,'$1percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
+const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
@@ -14,13 +14,34 @@ export function supportedName(proposed,receiptName){
  const source=new Set(words(receiptName)),candidate=words(proposed),actual=new Set(candidate);
  if(!candidate.length||candidate.some(w=>!source.has(w)&&!['and','with','of'].includes(w)))return false;
  // Do not erase a visible type/flavour or a fat percentage while removing a brand.
- for(const word of source)if((protectedWords.has(word)||protectedWords.has(word.replace(/s$/,''))||/^\d+(?:percent)$/.test(word))&&!actual.has(word))return false;
+ for(const word of source)if((protectedWords.has(word)||protectedWords.has(word.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(word))&&!actual.has(word))return false;
  return true;
+}
+const qualifiersOnly=new Set('blue black red green brown white yellow pink grey gray gold silver original organic frozen raw whole split ground sliced chopped skim skimmed unsalted salted sweet spicy plain fine nylon'.split(' '));
+// Product types follow their flavour/ingredient in a completed display name
+// (for example, mango chutney). Qualifiers such as organic stay in front.
+const typeSuffixWords=new Set('rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel bag lighter plier tool foil bleach sanitizer sponge broom mop'.split(' '));
+export function qualifiedReceiptName(proposed,receiptName){
+ if(typeof proposed!=='string')return '';
+ const source=words(receiptName),candidate=words(proposed),actual=new Set(candidate);
+ // A colour/adjective does not identify an opaque brand-only receipt label.
+ if(candidate.length&&candidate.every(w=>qualifiersOnly.has(w))&&source.join(' ')!==candidate.join(' '))return '';
+ if(supportedName(proposed,receiptName))return proposed.trim();
+ if(!receiptSection(proposed)||!candidate.length||candidate.some(w=>!source.includes(w)&&!['and','with','of'].includes(w)))return '';
+ const missing=[...new Set(source.filter(w=>(protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(w))&&!actual.has(w)))].sort((a,b)=>Number(/percent$/.test(b))-Number(/percent$/.test(a)));
+ const display=w=>w.replace(/decimal(\d+)percent$/,'.$1%').replace(/percent$/,'%');
+ const typeWord=w=>typeSuffixWords.has(w)||typeSuffixWords.has(w.replace(/s$/,''));
+ const prefix=missing.filter(w=>!typeWord(w)).map(display).join(' ').replace(/\p{L}/u,c=>c.toUpperCase());
+ const suffix=missing.filter(typeWord).map(display).join(' ');
+ const completed=[prefix,proposed.trim(),suffix].filter(Boolean).join(' ');
+ // Complete a grounded suggestion only from qualifiers already in the print.
+ // New identities, amounts and measurements are never supplied here.
+ return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
 export function identifyReceiptItems(rows,annotations=[]){
  return rows.map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
-  const suggestions=[...new Set(matches.map(a=>a.name).filter(name=>supportedName(name,receiptName)))];
+  const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
   const name=suggestions.length===1?suggestions[0].trim():receiptName;
   const clear=receiptSection(receiptName),sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
