@@ -43,9 +43,9 @@ test('grounded name completion puts missing product types after their ingredient
  assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
- for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water'])assert.equal(receiptSection(name),'kitchen');
+ for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','TEST THR CHS RCH','TEST SSME BN'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner'])assert.equal(receiptSection(name),'household');
- for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix'])assert.equal(receiptSection(name),'');
+ for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
 });
 test('document evidence and product identity remain separate from quantities, amounts and repeated purchases',()=>{
  const lines=['TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND SOAP $3.00','GROCERY $2.00','TOTAL $13.00'];
