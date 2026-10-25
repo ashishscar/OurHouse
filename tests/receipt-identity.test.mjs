@@ -23,6 +23,9 @@ test('short names recover only qualifiers printed on the same product and keep o
  const named=identifyReceiptItems([cream],[{source:cream.raw,name:'Cream',section:'pantry'}])[0];
  assert.equal(named.name,'35% Whipping Cream');assert.equal(named.receiptName,cream.name);
  assert.equal(named.qty,2);assert.equal(named.unit,'kg');assert.equal(named.amount,'4.00');assert.equal(named.raw,cream.raw);
+ assert.equal(qualifiedReceiptName('PRD VX','TEST BRAND PRD VX'),'');
+ assert.equal(qualifiedReceiptName('8 inch T&G plier','TEST 8" T&G PLIER'),'8 inch T&G plier');
+ for(const food of ['Jeera puri','Poona mukhwas','Shahi biryani','Paratha'])assert.equal(qualifiedReceiptName(food,'TEST '+food.toUpperCase()),food);
 });
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];

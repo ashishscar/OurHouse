@@ -1,7 +1,7 @@
 // Suggestions never replace source evidence, quantities or prices. Unknown
 // identities keep the printed label; a section remains editable before import.
 const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
-const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
+const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
@@ -13,6 +13,11 @@ export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
  const source=new Set(words(receiptName)),candidate=words(proposed),actual=new Set(candidate);
  if(!candidate.length||candidate.some(w=>!source.has(w)&&!['and','with','of'].includes(w)))return false;
+ // Removing a leading token from an entirely opaque till abbreviation does
+ // not establish that the token was a brand. Preserve the printed label.
+ const readable=candidate.some(w=>protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||(w.length>=5&&(w.match(/[aeiou]/g)||[]).length>=2));
+ const omittedOnlyUnits=[...source].every(w=>actual.has(w)||['each','ea','pc','pcs','unit'].includes(w));
+ if(candidate.length<source.size&&!readable&&!omittedOnlyUnits)return false;
  // Do not erase a visible type/flavour or a fat percentage while removing a brand.
  for(const word of source)if((protectedWords.has(word)||protectedWords.has(word.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(word))&&!actual.has(word))return false;
  return true;
