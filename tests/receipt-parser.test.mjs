@@ -33,6 +33,9 @@ test('receipt prices and tax flags never become product names or pantry quantiti
   {name:'BASMATI RICE',qty:5,unit:'kg',amount:'18.49',quantityKnown:true,pick:false},
   {name:'BREAD',qty:1,unit:'pcs',amount:'3.49',quantityKnown:false,pick:false},
  ]);
+ const reversedTax=parseReceipt('TEST SOAP $2.00\n13% HST $0.26\nTOTAL $2.26');
+ assert.deepEqual(reversedTax.map(({name,amount})=>({name,amount})),[{name:'TEST SOAP',amount:'2.00'}]);
+ assert.equal(parseReceipt('SOUR CREAM 13% $4.00')[0].name,'SOUR CREAM 13%');
 });
 test('counts, weights, decimal commas and currency-prefixed whole prices are distinct fields',()=>{
  const rows=parseReceipt('2 x YOGURT 500g 4.98\nAPPLES 3 @ 0.99 2.97 T\nTOMATOES 0.742 kg @ 2.99/kg 2.22 F\nTOFU 400 g €3,49\nLENTILS 1kg ₹120\nRICE 5 kg Rs. 450.00');
