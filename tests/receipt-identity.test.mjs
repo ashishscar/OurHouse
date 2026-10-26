@@ -26,6 +26,9 @@ test('short names recover only qualifiers printed on the same product and keep o
  assert.equal(qualifiedReceiptName('PRD VX','TEST BRAND PRD VX'),'');
  assert.equal(qualifiedReceiptName('8 inch T&G plier','TEST 8" T&G PLIER'),'8 inch T&G plier');
  for(const food of ['Jeera puri','Poona mukhwas','Shahi biryani','Paratha'])assert.equal(qualifiedReceiptName(food,'TEST '+food.toUpperCase()),food);
+ assert.equal(qualifiedReceiptName('Cut okra','DIVYA OKRA CUT'),'Cut okra');
+ assert.equal(qualifiedReceiptName('Cut okra','DIVYA FROZEN OKRA CUT'),'Frozen Cut okra');
+ assert.equal(qualifiedReceiptName('Cut okra','DIVYA CARROT CUT'),'');
 });
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];
