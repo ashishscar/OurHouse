@@ -29,6 +29,7 @@ test('short names recover only qualifiers printed on the same product and keep o
  assert.equal(qualifiedReceiptName('Cut okra','DIVYA OKRA CUT'),'Cut okra');
  assert.equal(qualifiedReceiptName('Cut okra','DIVYA FROZEN OKRA CUT'),'Frozen Cut okra');
  assert.equal(qualifiedReceiptName('Cut okra','DIVYA CARROT CUT'),'');
+ assert.equal(qualifiedReceiptName('Bhakharwadi','RD MINI BHAKHARWADI'),'Mini Bhakharwadi');
 });
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];
@@ -46,7 +47,7 @@ test('grounded name completion puts missing product types after their ingredient
  assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
- for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','TEST THR CHS RCH','TEST SSME BN'])assert.equal(receiptSection(name),'kitchen');
+ for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
 });
