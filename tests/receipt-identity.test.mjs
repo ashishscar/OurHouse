@@ -23,6 +23,7 @@ test('opaque brand-only names retain their printed order',()=>{
  assert.equal(qualifiedReceiptName('BLUE BRAND','BRAND BLUE'),'BRAND BLUE');
  assert.equal(qualifiedReceiptName('Roma tomato','TOMATO ROMA'),'Roma tomato');
  assert.equal(qualifiedReceiptName('RUSS potato','POTATO RUSS'),'RUSS potato');
+ assert.equal(qualifiedReceiptName('Bunched spinach','SPINACH BUNCHED'),'Bunched spinach');
 });
 test('short names recover only qualifiers printed on the same product and keep opaque labels',()=>{
  assert.equal(qualifiedReceiptName('Cashews','TEST BRAND SPLIT CASHEWS 500G'),'Split Cashews');
