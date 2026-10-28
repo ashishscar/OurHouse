@@ -26,6 +26,7 @@ test('opaque brand-only names retain their printed order',()=>{
  assert.equal(qualifiedReceiptName('Bunched spinach','SPINACH BUNCHED'),'Bunched spinach');
 });
 test('short names recover only qualifiers printed on the same product and keep opaque labels',()=>{
+ assert.equal(qualifiedReceiptName('Waters','NAYA WATERS'),'Waters');
  assert.equal(qualifiedReceiptName('Cashews','TEST BRAND SPLIT CASHEWS 500G'),'Split Cashews');
  assert.equal(qualifiedReceiptName('Green peas','TEST BRAND ORGANIC GREEN PEAS 1KG'),'Organic Green peas');
  assert.equal(qualifiedReceiptName('Cream','TEST BRAND WHIPPING CREAM 35%'),'35% Whipping Cream');
@@ -60,7 +61,7 @@ test('grounded name completion puts missing product types after their ingredient
  assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
- for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
+ for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','NAYA WATERS','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
 });
