@@ -12,6 +12,18 @@ test('decimal fat percentages cannot become a different percentage during name s
  assert.equal(qualifiedReceiptName('Milk','TEST BRAND MILK 3.25%'),'3.25% Milk');
  assert.equal(qualifiedReceiptName('25% Milk','TEST BRAND MILK 3.25%'),'');
 });
+test('an opaque receipt label can drop only an explicit pack size',()=>{
+ assert.equal(qualifiedReceiptName('HOMO','HOMO 4LT'),'HOMO');
+ assert.equal(qualifiedReceiptName('ZQXR','ZQXR 4LT'),'ZQXR');
+ assert.equal(qualifiedReceiptName('ZQXR','ZQXR X4'),'');
+ assert.equal(qualifiedReceiptName('BRAND','BRAND BLUE 4LT'),'');
+});
+test('opaque brand-only names retain their printed order',()=>{
+ assert.equal(qualifiedReceiptName('CLASSIC LAYS','LAYS CLASSIC'),'LAYS CLASSIC');
+ assert.equal(qualifiedReceiptName('BLUE BRAND','BRAND BLUE'),'BRAND BLUE');
+ assert.equal(qualifiedReceiptName('Roma tomato','TOMATO ROMA'),'Roma tomato');
+ assert.equal(qualifiedReceiptName('RUSS potato','POTATO RUSS'),'RUSS potato');
+});
 test('short names recover only qualifiers printed on the same product and keep opaque labels',()=>{
  assert.equal(qualifiedReceiptName('Cashews','TEST BRAND SPLIT CASHEWS 500G'),'Split Cashews');
  assert.equal(qualifiedReceiptName('Green peas','TEST BRAND ORGANIC GREEN PEAS 1KG'),'Organic Green peas');
