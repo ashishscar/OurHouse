@@ -69,8 +69,20 @@ test('grounded name completion puts missing product types after their ingredient
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
  for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','NAYA WATERS','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
- for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner'])assert.equal(receiptSection(name),'household');
+ for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner','TIDE COLDWTR','DOWNY BEADS','COLGATE TP'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
+});
+test('verified Costco household labels override conflicting model categories without changing evidence',()=>{
+ for(const receiptName of ['TIDE COLDWTR','DOWNY BEADS','COLGATE TP']){
+  const row={name:receiptName,receiptName,raw:`${receiptName} $27.99`,qty:1,unit:'item',amount:'27.99'};
+  const named=identifyReceiptItems([row],[{source:row.raw,name:receiptName,section:'pantry'}])[0];
+  assert.equal(named.section,'household');
+  assert.equal(named.receiptName,receiptName);
+  assert.equal(named.raw,row.raw);
+  assert.equal(named.amount,row.amount);
+ }
+ assert.equal(receiptSection('TIDE RICE'),'kitchen');
+ assert.equal(receiptSection('COLGATE SNACKS'),'kitchen');
 });
 test('document evidence and product identity remain separate from quantities, amounts and repeated purchases',()=>{
  const lines=['TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND SOAP $3.00','GROCERY $2.00','TOTAL $13.00'];
