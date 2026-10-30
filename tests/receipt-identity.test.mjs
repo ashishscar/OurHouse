@@ -17,6 +17,13 @@ test('an opaque receipt label can drop only an explicit pack size',()=>{
  assert.equal(qualifiedReceiptName('ZQXR','ZQXR 4LT'),'ZQXR');
  assert.equal(qualifiedReceiptName('ZQXR','ZQXR X4'),'');
  assert.equal(qualifiedReceiptName('BRAND','BRAND BLUE 4LT'),'');
+ assert.equal(qualifiedReceiptName('Ketchup','SAMPLE 4L KCP'),'Ketchup');
+ const row={name:'SAMPLE 4L KCP',raw:'SAMPLE 4L KCP $4.00',qty:1,unit:'pcs',amount:'4.00'};
+ const named=identifyReceiptItems([row],[{source:row.raw,name:'Ketchup',section:'pantry'}])[0];
+ assert.equal(named.name,'Ketchup');
+ assert.equal(named.receiptName,row.name);
+ assert.equal(named.raw,row.raw);
+ assert.equal(named.amount,row.amount);
 });
 test('opaque brand-only names retain their printed order',()=>{
  assert.equal(qualifiedReceiptName('CLASSIC LAYS','LAYS CLASSIC'),'LAYS CLASSIC');
