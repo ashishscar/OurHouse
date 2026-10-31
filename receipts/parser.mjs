@@ -53,7 +53,7 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null;
+ let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null;const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
  function finishRate(next,allowPrevious=true){
@@ -69,6 +69,7 @@ export function parseReceipt(text){
  }
  function add(row){finishRate(row);rows.push(row);}
  for(const [lineIndex,line] of lines.entries()){
+  if(consumed.has(lineIndex))continue;
   if(orphanPrice&&lineIndex>orphanPrice.lineIndex+1)orphanPrice=null;
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
@@ -81,6 +82,15 @@ export function parseReceipt(text){
   if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
+  // OCR can list a far-right price before the adjacent percentage and name
+  // on a tilted receipt. Join only this exact three-line printed sequence.
+  if(priced&&!body&&!pending&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(lines[lineIndex+1]||'')&&lineIndex+2<lines.length){
+   const qualifier=lines[lineIndex+1],next=lines[lineIndex+2];
+   if(!splitPrice(next)&&validName(quantity(next).name)){
+    const row={...quantity(qualifier+' '+next),amount:priced.amount,raw:qualifier+'\n'+line+'\n'+next};
+    add(row);last=row;pending=null;pendingDraft=null;consumed.add(lineIndex+1);consumed.add(lineIndex+2);continue;
+   }
+  }
   // A till can print the amount beside a percentage and wrap the product
   // name onto the next line. Bind that amount only to the adjacent name.
   if(priced&&!body&&pending&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)){

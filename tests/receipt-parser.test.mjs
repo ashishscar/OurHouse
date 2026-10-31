@@ -92,6 +92,17 @@ test('wrapped repeated products keep every price and do not absorb the receipt h
  assert.deepEqual(incomplete.map(({name,amount})=>({name,amount})),[{name:'TEST MILK',amount:'5.00'}]);
 });
 
+test('tilted OCR price-first percent rows keep each independent purchase',()=>{
+ const text='$8.99\n35%\nTEST WHIPPING CREAM\n$8.99\n35%\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nSUBTOTAL $26.97';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),Array(3).fill({name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1}));
+ assert.equal(rows[0].raw,'35%\n$8.99\nTEST WHIPPING CREAM');
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ const interrupted=parseReceipt('$8.99\n35%\nSUBTOTAL $8.99\nTEST WHIPPING CREAM $8.99');
+ assert.equal(interrupted.length,1);
+ assert.equal(interrupted[0].name,'TEST WHIPPING CREAM');
+});
+
 test('a leading count belongs to the next product only when its printed amount supports it',()=>{
  const rows=parseReceipt('TEST BRAND CHEESE $13.99\n5 @ $5.99\nTEST BRAND SOUR CREAM $29.95\nTOTAL $43.94');
  assert.equal(rows.length,2);
