@@ -1,6 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseReceipt,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
+import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
+
+test('hyphenated stock numbers stay separate from names and measurements',()=>{
+ const rows=parseReceipt('527-8910-2 TEST STORAGE BOX $7.25\n3 638-1029-4 TEST TOWEL $9.00');
+ assert.deepEqual(rows.map(({name,itemNumber,qty,unit,amount})=>({name,itemNumber,qty,unit,amount})),[
+  {name:'TEST STORAGE BOX',itemNumber:'527-8910-2',qty:1,unit:'pcs',amount:'7.25'},
+  {name:'TEST TOWEL',itemNumber:'638-1029-4',qty:3,unit:'pcs',amount:'9.00'},
+ ]);
+ const other=parseReceipt('2026-10-24 TEST NOTE $1.00\n555-010-1234 TEST CONTACT $2.00');
+ assert.equal(other[0].itemNumber,undefined);assert.ok(other[0].name.startsWith('2026-10-24'));
+ assert.equal(other[1].itemNumber,undefined);assert.ok(other[1].name.startsWith('555-010-1234'));
+});
+
+test('OCR-damaged numeric item codes do not become product names',()=>{
+ const rows=parseReceiptFields({label:'057379(501 TEST WATERS',amount:'4.75'});
+ assert.equal(rows.name,'TEST WATERS');assert.equal(rows.raw,'057379(501 TEST WATERS $4.75');
+ const lines=parseReceipt('0603838:100 TEST CORN $4.99\n252411V TEST PEPPER $10.99\n*4087 TEST TOMATO $3.00');
+ assert.deepEqual(lines.map(r=>r.name),['TEST CORN','TEST PEPPER','TEST TOMATO']);
+ assert.equal(parseReceipt('2026-10-24 TEST NOTE $1.00')[0].name,'2026-10-24 TEST NOTE');
+ assert.equal(parseReceipt('7UP TEST SODA $2.00')[0].name,'7UP TEST SODA');
+});
+
+test('a wrapped package size below the current priced product adds stock without changing price',()=>{
+ const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
+ assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
+  {name:'TEST CRACKERS',qty:400,unit:'g',packCount:1,amount:'3.49'},
+  {name:'TEST OATS',qty:750,unit:'g',packCount:3,amount:'6.00'},
+ ]);
+ assert.equal(rows[0].raw,'TEST CRACKERS $3.49\n400G');
+ const conflict=parseReceipt('TEST MILK 2L $6.00\n1L')[0];
+ assert.equal(conflict.qty,2);assert.equal(conflict.unit,'L');assert.match(conflict.warning,/conflicts/);assert.equal(conflict.unmatchedQuantity,'1L');
+ const separated=parseReceipt('TEST SOAP $2.00\nDiscount -$0.25\n400G\nTEST PEARS $3.00');
+ assert.equal(separated[0].qty,1);assert.equal(separated[1].qty,1);
+});
 
 test('receipt prices and tax flags never become product names or pantry quantities',()=>{
  const rows=pantryReceipt('FAMILY MARKET\n123 Main Street\n123456 MILK 2L    $5.99 F\nBASMATI RICE 5 kg  18.49H\nBREAD 3.49 A\nSUBTOTAL 27.97\nHST 1.20\nTOTAL 29.17\nVISA 29.17\nTHANK YOU');
@@ -9,6 +42,9 @@ test('receipt prices and tax flags never become product names or pantry quantiti
   {name:'BASMATI RICE',qty:5,unit:'kg',amount:'18.49',quantityKnown:true,pick:false},
   {name:'BREAD',qty:1,unit:'pcs',amount:'3.49',quantityKnown:false,pick:false},
  ]);
+ const reversedTax=parseReceipt('TEST SOAP $2.00\n13% HST $0.26\nTOTAL $2.26');
+ assert.deepEqual(reversedTax.map(({name,amount})=>({name,amount})),[{name:'TEST SOAP',amount:'2.00'}]);
+ assert.equal(parseReceipt('SOUR CREAM 13% $4.00')[0].name,'SOUR CREAM 13%');
 });
 test('counts, weights, decimal commas and currency-prefixed whole prices are distinct fields',()=>{
  const rows=parseReceipt('2 x YOGURT 500g 4.98\nAPPLES 3 @ 0.99 2.97 T\nTOMATOES 0.742 kg @ 2.99/kg 2.22 F\nTOFU 400 g €3,49\nLENTILS 1kg ₹120\nRICE 5 kg Rs. 450.00');
@@ -39,6 +75,32 @@ test('wrapped product names retain the full flavour, size and leading fat qualif
  assert.equal(rows[1].name,'TEST BRAND SPICY VEGGIE BURGERS');
  assert.equal(rows[1].qty,400);
  assert.equal(rows[2].name,'35% TEST BRAND WHIPPING CREAM');
+});
+test('wrapped repeated products keep every price and do not absorb the receipt heading',()=>{
+ const text='FAMILY MARKET\n123 Main Street\n35%\n$8.99\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx1\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]\nTEST SPICY SNACK\nTEST CHEVDO\n13 @ $1.69ea. $21.97 Tx1\nSUBTOTAL $43.33\nTOTAL $43.33';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'21.97',qty:13},
+ ]);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ assert.equal(rows[3].raw,'TEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]');
+ const incomplete=parseReceipt('35%\n$8.99\nTEST MILK $5.00\nTOTAL $13.99');
+ assert.deepEqual(incomplete.map(({name,amount})=>({name,amount})),[{name:'TEST MILK',amount:'5.00'}]);
+});
+
+test('tilted OCR price-first percent rows keep each independent purchase',()=>{
+ const text='$8.99\n35%\nTEST WHIPPING CREAM\n$8.99\n35%\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nSUBTOTAL $26.97';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),Array(3).fill({name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1}));
+ assert.equal(rows[0].raw,'35%\n$8.99\nTEST WHIPPING CREAM');
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ const interrupted=parseReceipt('$8.99\n35%\nSUBTOTAL $8.99\nTEST WHIPPING CREAM $8.99');
+ assert.equal(interrupted.length,1);
+ assert.equal(interrupted[0].name,'TEST WHIPPING CREAM');
 });
 
 test('a leading count belongs to the next product only when its printed amount supports it',()=>{

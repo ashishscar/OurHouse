@@ -1,9 +1,16 @@
 import {parseReceipt} from './parser.mjs';
 // Matching is restricted to the shared physical boundary, never the whole receipt.
-export function sectionPlan(width,height,{ai=false}={}){
+export function sectionPlan(width,height,{ai=false,horizontalCrop=null}={}){
  if(!Number.isFinite(width)||!Number.isFinite(height)||width<1||height<1)throw Error('This photo has invalid dimensions.');
- const scale=Math.min(ai?1:2,(ai?1400:1800)/width),w=Math.round(width*scale),h=Math.round(height*scale),size=ai?1200:1800,overlap=ai?240:300,sections=[];
- for(let top=0;top<h;top+=size-overlap){sections.push({left:0,top,width:w,height:Math.min(size,h-top),scale});if(top+size>=h)break;if(sections.length>=64)throw Error('This receipt is too long for one photo. Take closer photos of shorter sections.');}
+ let sourceLeft=0,sourceWidth=width;
+ if(ai&&horizontalCrop){
+  if(!Number.isFinite(horizontalCrop.left)||!Number.isFinite(horizontalCrop.width)||horizontalCrop.left<0||horizontalCrop.width<1||horizontalCrop.left+horizontalCrop.width>width)throw Error('Invalid receipt paper bounds.');
+  sourceLeft=Math.floor(horizontalCrop.left);sourceWidth=Math.min(width,Math.ceil(horizontalCrop.left+horizontalCrop.width))-sourceLeft;
+ }
+ // Choose resolution from the paper, before resizing. Scaling the entire photo
+ // first permanently discarded letters on narrow receipts in a wide scene.
+ const scale=Math.min(ai?1:2,(ai?1400:1800)/sourceWidth),w=Math.round(sourceWidth*scale),h=Math.round(height*scale),size=ai?1200:1800,overlap=ai?240:300,sections=[];
+ for(let top=0;top<h;top+=size-overlap){sections.push({left:sourceLeft*scale,top,width:w,height:Math.min(size,h-top),scale});if(top+size>=h)break;if(sections.length>=64)throw Error('This receipt is too long for one photo. Take closer photos of shorter sections.');}
  return {width:w,height:h,scale,sections};
 }
 // A conservative horizontal paper bound removes dark scenery, never receipt

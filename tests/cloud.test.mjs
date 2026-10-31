@@ -38,7 +38,7 @@ test('D1 transaction compare-and-swap aborts every statement after stale revisio
 test('50 concurrent D1 saves merge; same operation replays once; stale overlapping cooking rolls back',async()=>{
  const writes=Array.from({length:50},(_,i)=>()=>patch(editor,'parallel_'+i,[{path:'grocery/item_'+i,before:null,value:{name:'Item '+i,qty:1,unit:'pcs'}}]));
  const first=await Promise.allSettled(writes.map(write=>write()));
- for(const [i,result] of first.entries())if(result.status==='rejected'){assert.equal(result.reason.code,'BUSY');await writes[i]();}
+ for(const [i,result] of first.entries())if(result.status==='rejected'){assert.equal(result.reason.code,'BUSY',`Unexpected concurrent-save rejection: ${String(result.reason?.stack||result.reason)}`);await writes[i]();}
  let snap=await s.snapshot(owner);assert.equal(Object.keys(snap.data.grocery).length,50);
  const op={id:'once',actor:owner,house,changes:[{path:'pantry/rice/qty',before:5,value:4}]};await s.patch(owner,op);await patch(editor,'later',[{path:'pantry/rice/qty',before:4,value:3}]);assert.equal((await s.patch(owner,op)).replayed,true);assert.equal((await s.snapshot(owner)).data.pantry.rice.qty,3);
  await reject(()=>patch(owner,'bad_cook',[{path:'pantry/rice/qty',before:4,value:2},{path:'weeks/week1',before:null,value:{Monday:{cooked:true}}}]),409,'CONFLICT');assert.equal((await s.snapshot(owner)).data.weeks.week1,undefined);
