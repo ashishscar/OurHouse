@@ -2,7 +2,7 @@
 import {printedReceiptCount} from './metadata.mjs';
 const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
-const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}\d{0,2})?$`,'i');
+const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}[\d\[\]]{0,2})?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
 const noise=/^(?:(?:(?:sub[\s-]*|grand\s*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
@@ -53,7 +53,7 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null;
+ let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null;
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
  function finishRate(next,allowPrevious=true){
@@ -68,7 +68,8 @@ export function parseReceipt(text){
   deferredRate=null;
  }
  function add(row){finishRate(row);rows.push(row);}
- for(const line of lines){
+ for(const [lineIndex,line] of lines.entries()){
+  if(orphanPrice&&lineIndex>orphanPrice.lineIndex+1)orphanPrice=null;
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
@@ -80,6 +81,19 @@ export function parseReceipt(text){
   if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
+  // A till can print the amount beside a percentage and wrap the product
+  // name onto the next line. Bind that amount only to the adjacent name.
+  if(priced&&!body&&pending&&/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)){
+   orphanPrice={amount:priced.amount,qualifier:pending,priceLine:line,lineIndex};continue;
+  }
+  if(orphanPrice){
+   const held=orphanPrice;orphanPrice=null;
+   if(!priced&&validName(quantity(body).name)){
+    const row={...quantity(held.qualifier+' '+body),amount:held.amount,raw:held.qualifier+'\n'+held.priceLine+'\n'+line};
+    add(row);last=row;pending=null;pendingDraft=null;continue;
+   }
+   pending=null;pendingDraft=null;
+  }
   // A count @ unit price is a continuation, even when its last decimal looks
   // like a line total. Test the full line before removing the trailing price.
   const rate=body.match(ratePattern)||(!priced?.body?.match(ratePattern)?line.match(ratePattern):null);
@@ -106,8 +120,19 @@ export function parseReceipt(text){
   const q=quantity(body);
   if(priced&&pending&&!pendingDraft&&!q.itemNumber&&(/^\d{4,14}\s/.test(pending)||/^\d{1,2}(?:[.,]\d{1,2})?\s*%$/.test(pending)||!validName(q.name))){const joined=quantity(pending+' '+body);if(validName(joined.name)){const row={...joined,amount:priced.amount,raw:pending+'\n'+line};add(row);last=row;pending=null;continue;}}
   if(priced&&!body&&pending){const row={...(pendingDraft||quantity(pending)),amount:priced.amount,raw:pending+'\n'+line};if(validName(row.name)){add(row);last=row;}pending=null;continue;}
-  if(priced){pending=null;pendingDraft=null;if(validName(q.name)){const row={...q,amount:priced.amount,raw:line};add(row);last=row;}else last=null;}
-  else {const qualifier=/^(?:sweet|salted|unsalted|spicy|plain|original|whole|split|ground|sliced|chopped)$/i.test(line),joined=pending&&!pendingDraft&&qualifier?quantity(pending+' '+line):null;pendingDraft=null;pending=joined&&validName(joined.name)?pending+'\n'+line:validName(q.name)?line:null;last=pending?null:last;}
+  if(priced){
+   const heldPending=pending;
+   const joined=rows.length>0&&heldPending&&heldPending.split('\n').length===1&&!/[＊*]/.test(heldPending)&&!pendingDraft&&validName(quantity(heldPending).name)&&validName(q.name)?quantity(heldPending+' '+body):null;
+   pending=null;pendingDraft=null;
+   if(joined&&validName(joined.name)){const row={...joined,amount:priced.amount,raw:heldPending+'\n'+line};add(row);last=row;}
+   else if(validName(q.name)){const row={...q,amount:priced.amount,raw:line};add(row);last=row;}else last=null;
+  }
+  else {
+   const heading=/^\d{2}\s*-\s*[A-Z]|\bBOB\s+COUNT\b|\*{4,}/i.test(line);
+   const qualifier=/^(?:sweet|salted|unsalted|spicy|plain|original|whole|split|ground|sliced|chopped)$/i.test(line);
+   const joined=(rows.length>0||qualifier)&&!heading&&pending&&!/[＊*]/.test(pending)&&!pendingDraft&&pending.split('\n').length<2&&validName(quantity(pending).name)&&(qualifier||validName(q.name))?quantity(pending+' '+line):null;
+   pendingDraft=null;pending=heading?null:joined&&validName(joined.name)?pending+'\n'+line:validName(q.name)?line:null;last=pending?null:last;
+  }
   if(rows.length>=500)break;
  }
  finishRate();

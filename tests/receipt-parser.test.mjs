@@ -76,6 +76,21 @@ test('wrapped product names retain the full flavour, size and leading fat qualif
  assert.equal(rows[1].qty,400);
  assert.equal(rows[2].name,'35% TEST BRAND WHIPPING CREAM');
 });
+test('wrapped repeated products keep every price and do not absorb the receipt heading',()=>{
+ const text='FAMILY MARKET\n123 Main Street\n35%\n$8.99\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx1\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]\nTEST SPICY SNACK\nTEST CHEVDO\n13 @ $1.69ea. $21.97 Tx1\nSUBTOTAL $43.33\nTOTAL $43.33';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'21.97',qty:13},
+ ]);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ assert.equal(rows[3].raw,'TEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]');
+ const incomplete=parseReceipt('35%\n$8.99\nTEST MILK $5.00\nTOTAL $13.99');
+ assert.deepEqual(incomplete.map(({name,amount})=>({name,amount})),[{name:'TEST MILK',amount:'5.00'}]);
+});
 
 test('a leading count belongs to the next product only when its printed amount supports it',()=>{
  const rows=parseReceipt('TEST BRAND CHEESE $13.99\n5 @ $5.99\nTEST BRAND SOUR CREAM $29.95\nTOTAL $43.94');

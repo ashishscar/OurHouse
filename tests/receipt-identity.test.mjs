@@ -84,6 +84,13 @@ test('verified Costco household labels override conflicting model categories wit
  assert.equal(receiptSection('TIDE RICE'),'kitchen');
  assert.equal(receiptSection('COLGATE SNACKS'),'kitchen');
 });
+test('user-confirmed Surati bhindi displays Bhindi without changing the printed purchase',()=>{
+ const row={name:'SURATI BHINDI',raw:'(4)06865600856 SURATI BHINDI MRJ\n4 @ $1.79 7.16',qty:4,unit:'pcs',amount:'7.16'};
+ const named=identifyReceiptItems([row])[0];
+ assert.deepEqual([named.name,named.section,named.receiptName,named.raw,named.qty,named.unit,named.amount],['Bhindi','kitchen',row.name,row.raw,4,'pcs','7.16']);
+ assert.equal(receiptSection('SURATI BHINDI'),'kitchen');
+ assert.notEqual(identifyReceiptItems([{...row,name:'SURATI GATHIYA'}])[0].name,'Bhindi');
+});
 test('document evidence and product identity remain separate from quantities, amounts and repeated purchases',()=>{
  const lines=['TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND WHIPPING CREAM 35% $4.00','TEST BRAND SOAP $3.00','GROCERY $2.00','TOTAL $13.00'];
  const doc=documentFrom([{lines,labels:[{line:0,name:'35% Whipping cream',section:'pantry'},{line:1,name:'35% Whipping cream',section:'pantry'},{line:2,name:'Soap',section:'household'},{line:3,name:'Grocery',section:'unknown'}]}],{name:'synthetic.jpg'},{ai:true});
