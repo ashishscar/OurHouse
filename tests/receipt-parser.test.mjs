@@ -28,6 +28,14 @@ test('OCR-damaged numeric item codes do not become product names',()=>{
  assert.equal(parseReceipt('2026/10/24 TEST NOTE $1.00')[0].name,'2026/10/24 TEST NOTE');
 });
 
+test('repeated OCR decoration cannot merge a basket heading into the first priced product',()=>{
+ const rows=parseReceipt('哈哈哈哈哈哈 BASKET HEADER\n1234567 TEST OATS $4.25\n1234568 TEST RICE $5.50\nTOTAL $9.75');
+ assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[
+  {name:'TEST OATS',amount:'4.25'},
+  {name:'TEST RICE',amount:'5.50'},
+ ]);
+});
+
 test('a wrapped package size below the current priced product adds stock without changing price',()=>{
  const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
  assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
