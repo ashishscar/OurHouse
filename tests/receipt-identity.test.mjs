@@ -84,6 +84,20 @@ test('printed receipt departments classify unfamiliar labels while clear product
  const doc=documentFrom([{lines:['27-PRODUC:','ZXQ VARIETY 4.99','41-HOME','TEST OPAQUE ITEM 6.89','TOTAL 11.88'],labels:[{line:1,name:'ZXQ VARIETY',section:'unknown'},{line:3,name:'TEST OPAQUE ITEM',section:'unknown'}]}],{name:'synthetic.jpg'},{ai:true});
  assert.deepEqual(doc.items.map(row=>row.section),['kitchen','household']);
 });
+test('repeated purchases repair display names from another printed line while retaining every original line',()=>{
+ const row=(name,amount='8.99',itemNumber='')=>({name,raw:`${itemNumber?itemNumber+' ':''}${name} ${amount}`,amount,qty:1,unit:'pcs',itemNumber});
+ const cream=[row('35% FIELD WHIPPING CREAM'),row('35% FIELD WHIPPING CREAM'),row('35% FIELD WHIPPING CREAN')];
+ const annotations=cream.slice(0,2).map(item=>({source:item.raw,name:'35% Whipping cream',section:'pantry'}));
+ const named=identifyReceiptItems(cream,annotations);
+ assert.deepEqual(named.map(item=>item.name),['35% Whipping cream','35% Whipping cream','35% Whipping cream']);
+ assert.equal(named[2].receiptName,'35% FIELD WHIPPING CREAN');assert.equal(named[2].raw,cream[2].raw);assert.equal(named[2].nameSource,'repeated');
+ const produce=[row('EGGPLANT BABY','3.78','123456'),row('EGGPLANI BABY','4.23','123456')];
+ const corrected=identifyReceiptItems(produce,[{source:produce[0].raw,name:'Baby eggplant',section:'pantry'},{source:produce[1].raw,name:'EGGPLANI BABY',section:'pantry'}]);
+ assert.deepEqual(corrected.map(item=>item.name),['Baby eggplant','Baby eggplant']);assert.deepEqual(corrected.map(item=>item.amount),['3.78','4.23']);
+ const different=[row('35% FIELD WHIPPING CREAM'),row('25% FIELD WHIPPING CREAM'),row('35% FIELD WHIPPING CREAM')];
+ const separated=identifyReceiptItems(different,[{source:different[0].raw,name:'35% Whipping cream',section:'pantry'},{source:different[2].raw,name:'35% Whipping cream',section:'pantry'}]);
+ assert.equal(separated[1].name,'25% FIELD WHIPPING CREAM');
+});
 test('verified Costco household labels override conflicting model categories without changing evidence',()=>{
  for(const receiptName of ['TIDE COLDWTR','DOWNY BEADS','COLGATE TP']){
   const row={name:receiptName,receiptName,raw:`${receiptName} $27.99`,qty:1,unit:'item',amount:'27.99'};

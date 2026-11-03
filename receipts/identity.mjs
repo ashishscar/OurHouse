@@ -3,12 +3,13 @@
 const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
+protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai'.split(' '))protectedWords.add(word);
 const household=/\b(?:body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
 const food=/\b(?:milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron)\b/i;
-export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)?'kitchen':'';}
+export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)?'kitchen':'';}
 export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
  const source=new Set(words(receiptName)),candidate=words(proposed),actual=new Set(candidate);
@@ -47,8 +48,40 @@ export function qualifiedReceiptName(proposed,receiptName){
  // New identities, amounts and measurements are never supplied here.
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
+function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9%]+/g,' ').trim();}
+function withinTwoEdits(a,b){
+ if(Math.abs(a.length-b.length)>2)return false;
+ let previous=Array.from({length:b.length+1},(_,i)=>i);
+ for(let i=1;i<=a.length;i++){
+  const current=[i];for(let j=1;j<=b.length;j++)current[j]=Math.min(current[j-1]+1,previous[j]+1,previous[j-1]+(a[i-1]===b[j-1]?0:1));
+  if(Math.min(...current)>2)return false;previous=current;
+ }
+ return previous[b.length]<=2;
+}
+function repeatedNames(items){
+ const buckets=new Map();
+ for(const item of items){
+  const code=String(item.itemNumber||'').trim(),key=code.length>=4?'code:'+code:'price:'+item.amount+':'+item.qty+':'+item.unit;
+  if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(item);
+ }
+ for(const [key,bucket] of buckets){
+  if(bucket.length<2)continue;
+  const candidates=bucket.filter(item=>item.nameSource==='suggestion'&&receiptSection(item.name));
+  if(!candidates.length||new Set(candidates.map(item=>labelKey(item.name))).size!==1)continue;
+  const labelCounts=new Map();for(const item of candidates){const label=labelKey(item.receiptName);labelCounts.set(label,(labelCounts.get(label)||0)+1);}
+  const label=[...labelCounts].sort((a,b)=>b[1]-a[1])[0]?.[0];
+  if(!label||(!key.startsWith('code:')&&labelCounts.get(label)<2))continue;
+  const anchor=candidates.find(item=>labelKey(item.receiptName)===label),digits=label.match(/\d+/g)?.join(',')||'',wordsCount=label.split(' ').length;
+  for(const item of bucket){
+   const own=labelKey(item.receiptName);
+   if(item===anchor||item.nameSource!=='receipt'||(item.section&&item.section!==anchor.section)||own.length<8||own.split(' ').length!==wordsCount||(own.match(/\d+/g)?.join(',')||'')!==digits||!withinTwoEdits(own,label))continue;
+   item.name=anchor.name;item.nameSource='repeated';
+  }
+ }
+ return items;
+}
 export function identifyReceiptItems(rows,annotations=[]){
- return rows.map(row=>{
+ return repeatedNames(rows.map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
   const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':suggestions.length===1?suggestions[0].trim():receiptName;
@@ -58,5 +91,5 @@ export function identifyReceiptItems(rows,annotations=[]){
   // product type still wins when a store puts non-food goods under Grocery.
   const section=clear||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
   return {...row,name,receiptName,section,nameSource:name===receiptName?'receipt':'suggestion'};
- });
+ }));
 }
