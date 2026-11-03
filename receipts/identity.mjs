@@ -54,7 +54,9 @@ export function identifyReceiptItems(rows,annotations=[]){
   const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':suggestions.length===1?suggestions[0].trim():receiptName;
   const clear=receiptSection(receiptName),sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
-  const section=clear||(sections.length===1?sections[0]:'');
+  // A printed department resolves otherwise opaque till labels. A specific
+  // product type still wins when a store puts non-food goods under Grocery.
+  const section=clear||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
   return {...row,name,receiptName,section,nameSource:name===receiptName?'receipt':'suggestion'};
  });
 }

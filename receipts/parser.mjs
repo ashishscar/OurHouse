@@ -24,6 +24,21 @@ function repairReconciledRateGlyph(line,knownTotal=null){
  if(!total||Number(match[2])*Math.round(num(match[3])*100)!==Math.round(num(total)*100))return line;
  return match[1]+'$'+match[3]+line.slice(match[0].length);
 }
+function printedDepartment(line){
+ const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)\s*$/i);
+ if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
+ const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
+ if(!numbered)return '';
+ const label=numbered[1].toUpperCase();
+ function oneEdit(a,b){
+  if(Math.abs(a.length-b.length)>1)return false;
+  let i=0,j=0,errors=0;
+  while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;continue;}if(++errors>1)return false;if(a.length>=b.length)i++;if(b.length>=a.length)j++;}
+  return errors+Number(i<a.length||j<b.length)<=1;
+ }
+ const family=['GROCERY','DAIRY','FROZEN','PRODUCE','BAKERY','HOME','HOUSEHOLD','CLEANING'].find(word=>label===word||word.length>=6&&oneEdit(label,word));
+ return family?['HOME','HOUSEHOLD','CLEANING'].includes(family)?'household':'kitchen':'';
+}
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
@@ -64,7 +79,7 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
 }
 export function parseReceipt(text){
  const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>repairReconciledRateGlyph(x.replace(/\u00a0/g,' ').trim())).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null;const consumed=new Set();
+ let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='';const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
  function finishRate(next,allowPrevious=true){
@@ -78,10 +93,12 @@ export function parseReceipt(text){
   else if(previous){previous.warning=afterDiscount?'A quantity line after a discount could not be assigned safely. Stock was left unchanged; check the photo.':'A nearby quantity × unit price does not match the printed amount. Stock was left unchanged; check the photo.';previous.unmatchedQuantity=line;}
   deferredRate=null;
  }
- function add(row){finishRate(row);rows.push(row);}
+ function add(row){finishRate(row);if(department)row.department=department;rows.push(row);}
  for(const [lineIndex,line] of lines.entries()){
   if(consumed.has(lineIndex))continue;
   if(orphanPrice&&lineIndex>orphanPrice.lineIndex+1)orphanPrice=null;
+  const nextDepartment=printedDepartment(line);
+  if(nextDepartment){finishRate(undefined,false);department=nextDepartment;pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;

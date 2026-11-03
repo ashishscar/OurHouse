@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
+import {parseReceipt} from '../receipts/parser.mjs';
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
@@ -71,6 +72,17 @@ test('Pantry and Household use product words rather than substrings, with no for
  for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','NAYA WATERS','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner','TIDE COLDWTR','DOWNY BEADS','COLGATE TP'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
+});
+test('printed receipt departments classify unfamiliar labels while clear product types win',()=>{
+ const text='21-GROCERY\nZXQ VARIETY 4.99\nTEST SOAP 2.49\n41-HOME\nTEST OPAQUE ITEM 6.89\nTEST MILK 3.99\n27-PRODUC:\nFRESH QT 2.99\nTOTAL 21.35';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>row.department),['kitchen','kitchen','household','household','kitchen']);
+ assert.deepEqual(identifyReceiptItems(rows).map(row=>row.section),['kitchen','household','household','kitchen','kitchen']);
+ assert.deepEqual(rows.map(row=>row.amount),['4.99','2.49','6.89','3.99','2.99']);
+ const opaque=parseReceipt('TEST MARKET\nZXQ VARIETY 6.89');
+ assert.equal(identifyReceiptItems(opaque)[0].section,'');
+ const doc=documentFrom([{lines:['27-PRODUC:','ZXQ VARIETY 4.99','41-HOME','TEST OPAQUE ITEM 6.89','TOTAL 11.88'],labels:[{line:1,name:'ZXQ VARIETY',section:'unknown'},{line:3,name:'TEST OPAQUE ITEM',section:'unknown'}]}],{name:'synthetic.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>row.section),['kitchen','household']);
 });
 test('verified Costco household labels override conflicting model categories without changing evidence',()=>{
  for(const receiptName of ['TIDE COLDWTR','DOWNY BEADS','COLGATE TP']){
