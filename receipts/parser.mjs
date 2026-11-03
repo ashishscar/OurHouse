@@ -15,6 +15,15 @@ const rounded=n=>Math.round(n*1e6)/1e6;
 function measured(q,u){u=u.toLowerCase();return {qty:rounded(q*(u==='lb'||u==='lbs'?0.45359237:u==='oz'?28.349523125:1)),unit:unitMap[u]||'pcs'};}
 function amount(value){const s=value.replace(/[^\d.,]/g,'');const i=Math.max(s.lastIndexOf('.'),s.lastIndexOf(','));return i<0?s+'.00':s.slice(0,i).replace(/[.,]/g,'')+'.'+s.slice(i+1);}
 function splitPrice(line){const m=line.match(priceEnd)||line.match(bareCurrencyEnd);if(!m)return null;return {body:line.slice(0,m.index).trim(),amount:amount(m[2])};}
+function repairReconciledRateGlyph(line,knownTotal=null){
+ // OCR can read a currency glyph as "s". Correct only a rate whose separate
+ // line total proves the intended quantity and unit price in exact cents.
+ const match=line.match(/^(\s*(\d{1,3})\s*[@x×]\s*)s(\d+[.,]\d{2})(?=\s|$)/i);
+ if(!match)return line;
+ const total=knownTotal??splitPrice(line)?.amount;
+ if(!total||Number(match[2])*Math.round(num(match[3])*100)!==Math.round(num(total)*100))return line;
+ return match[1]+'$'+match[3]+line.slice(match[0].length);
+}
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
@@ -46,6 +55,7 @@ function applyRate(row,rate){
 // label is then evidence, not another price column to guess at.
 export function parseReceiptFields({label,amount:price,quantityLine=''}){
  if(typeof label!=='string'||label.length>160||/[\u0000-\u001f<>]/.test(label)||typeof price!=='string'||!/^\d{1,7}\.\d{2}$/.test(price)||typeof quantityLine!=='string'||quantityLine.length>160||/[\u0000-\u001f<>]/.test(quantityLine))throw Error('Invalid receipt fields');
+ quantityLine=repairReconciledRateGlyph(quantityLine,price);
  const row={...quantity(label.trim()),amount:price,raw:label.trim()+' $'+price+(quantityLine?'\n'+quantityLine:'')};
  if(!validName(row.name,true))throw Error('Invalid receipt product label');
  if(quantityLine){const rate=quantityLine.match(ratePattern);if(rate)applyRate(row,rate);else row.warning='The printed quantity line was not understood. Check the photo before selecting this product.';}
@@ -53,7 +63,7 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
  return row;
 }
 export function parseReceipt(text){
- const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>x.replace(/\u00a0/g,' ').trim()).filter(Boolean),rows=[];
+ const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>repairReconciledRateGlyph(x.replace(/\u00a0/g,' ').trim())).filter(Boolean),rows=[];
  let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null;const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.

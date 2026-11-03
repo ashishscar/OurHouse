@@ -36,6 +36,22 @@ test('repeated OCR decoration cannot merge a basket heading into the first price
  ]);
 });
 
+test('a currency glyph read as s is repaired only when quantity and line total reconcile',()=>{
+ const rows=parseReceipt('TEST MALAI PAN\n3 @ s6.29 18.87\nTEST YOGURT 5.99\nTOTAL 24.86');
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'TEST MALAI PAN',amount:'18.87',qty:3},
+  {name:'TEST YOGURT',amount:'5.99',qty:1},
+ ]);
+ const structured=parseReceiptFields({label:'TEST MALAI PAN',amount:'18.87',quantityLine:'3 @ s6.29'});
+ assert.equal(structured.qty,3);
+ assert.equal(structured.unitPrice,'6.29');
+ assert.equal(structured.warning,undefined);
+ const mismatch=parseReceiptFields({label:'TEST MALAI PAN',amount:'17.87',quantityLine:'3 @ s6.29'});
+ assert.equal(mismatch.qty,1);
+ assert.match(mismatch.warning,/not understood/);
+ assert.deepEqual(parseReceipt('TEST MALAI PAN\n3 @ s6.29 17.87\nTEST YOGURT 5.99').map(row=>row.name),['TEST YOGURT']);
+});
+
 test('a wrapped package size below the current priced product adds stock without changing price',()=>{
  const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
  assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
