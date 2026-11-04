@@ -233,13 +233,7 @@ openReceiptScan=async event=>{
    if(!current())return;document=OurHouseReceipts.documentFrom(pages,{name:file.name||'receipt',mime:file.type||'image/jpeg',fingerprint:importId,...prepared.source},{ai:job.ai,elapsedMs:Math.round(performance.now()-metricStart)});if(fallbackWarning)document.warnings.unshift(fallbackWarning);
    familyReceiptCache.set(cacheKey,document);while(familyReceiptCache.size>3)familyReceiptCache.delete(familyReceiptCache.keys().next().value);
   }
-  if(!current())return;const occurrences=new Map(),legacyOccurrences=new Map();scanReview=await Promise.all(document.items.map(async item=>{
-   const source=JSON.stringify([normName(item.receiptName||item.name),item.qty,item.unit,item.amount||'',item.itemNumber||'']),occurrence=(occurrences.get(source)||0)+1;occurrences.set(source,occurrence);
-   const legacySource=JSON.stringify([normName(item.ocrName||item.receiptName||item.name),item.qty,item.unit,item.amount||'',item.itemNumber||'']),legacyOccurrence=(legacyOccurrences.get(legacySource)||0)+1;legacyOccurrences.set(legacySource,legacyOccurrence);
-   const hash=async(value,count)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(importId+':'+value+':'+count))),b=>b.toString(16).padStart(2,'0')).join('');
-   const receiptLineId=await hash(source,occurrence),legacyReceiptLineId=item.ocrName?await hash(legacySource,legacyOccurrence):undefined;
-   return {...item,receiptLineId,...(legacyReceiptLineId&&legacyReceiptLineId!==receiptLineId?{legacyReceiptLineId}:{})};
-  }));if(!current())return;familyReceiptContext={actor:job.actor,house:job.house,importId,file,document,photoUrl:URL.createObjectURL(file)};closeAllSheets();openScanReviewSheet();
+  if(!current())return;const occurrences=new Map();scanReview=await Promise.all(document.items.map(async item=>{const source=JSON.stringify([normName(item.ocrName||item.receiptName||item.name),item.qty,item.unit,item.amount||'',item.itemNumber||'']),occurrence=(occurrences.get(source)||0)+1;occurrences.set(source,occurrence);const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(importId+':'+source+':'+occurrence));return {...item,receiptLineId:Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')};}));if(!current())return;familyReceiptContext={actor:job.actor,house:job.house,importId,file,document,photoUrl:URL.createObjectURL(file)};closeAllSheets();openScanReviewSheet();
  }catch(e){if(current()){metricFailed=true;closeAllSheets();void window.OurHouseMaintenance?.report('RECEIPT_SCAN');showToast(e.message||'Receipt could not be read. No stock changed.',true);}}
  finally{prepared?.release();if(familyReceiptJob===job)window.OurHouseMetrics?.measure('RECEIPT_SCAN',performance.now()-metricStart,metricFailed);try{await worker?.terminate();}catch{}if(familyReceiptJob===job)familyReceiptJob=null;}
 };
@@ -255,15 +249,14 @@ renderScanReviewList=()=>{
 };
 addItemsToPantry=items=>{
  const ctx=familyReceiptContext;if(!ctx||ctx.actor!==myUid||ctx.house!==siteId||!canEdit())throw Error('Your account changed. Read this receipt again.');
- const valid=items.flatMap(item=>{if(!['kitchen','household'].includes(item.section))throw Error('Choose Pantry or Household for '+item.name+' before adding it.');return ReceiptScanner.normalize([item]).map(value=>({...value,section:item.section,receiptName:item.receiptName||item.name,receiptLineId:item.receiptLineId,legacyReceiptLineId:item.legacyReceiptLineId}));}),current=DB.pantry||{},next=JSON.parse(JSON.stringify(current));let added=0,topped=0,skipped=0;
+ const valid=items.flatMap(item=>{if(!['kitchen','household'].includes(item.section))throw Error('Choose Pantry or Household for '+item.name+' before adding it.');return ReceiptScanner.normalize([item]).map(value=>({...value,section:item.section,receiptName:item.receiptName||item.name,receiptLineId:item.receiptLineId}));}),current=DB.pantry||{},next=JSON.parse(JSON.stringify(current));let added=0,topped=0,skipped=0;
  for(const item of valid){
-  if(!/^[a-f0-9]{32,64}$/.test(item.receiptLineId||'')||item.legacyReceiptLineId&&!/^[a-f0-9]{32,64}$/.test(item.legacyReceiptLineId))throw Error('Read this receipt again before importing.');
-  const already=Object.values(current).some(p=>p._receiptOps?.[item.receiptLineId]||item.legacyReceiptLineId&&p._receiptOps?.[item.legacyReceiptLineId]||p._receiptOps?.[ctx.importId]&&[normName(item.name),normName(item.receiptName)].includes(normName(p.name))&&compatible(p.unit,item.unit));
+  if(!/^[a-f0-9]{32,64}$/.test(item.receiptLineId||''))throw Error('Read this receipt again before importing.');
+  const already=Object.values(current).some(p=>p._receiptOps?.[item.receiptLineId]||p._receiptOps?.[ctx.importId]&&[normName(item.name),normName(item.receiptName)].includes(normName(p.name))&&compatible(p.unit,item.unit));
   if(already){skipped++;continue;}
   let entry=Object.entries(next).find(([,p])=>normName(p.name)===normName(item.name)&&compatible(p.unit,item.unit)&&(p.section||(p.category==='Household'?'household':'kitchen'))===item.section);
-  const operationIds={[item.receiptLineId]:Date.now(),...(item.legacyReceiptLineId?{[item.legacyReceiptLineId]:Date.now()}:{})};
-  if(entry){const [,p]=entry,factor=['kg','L'].includes(p.unit)?1000:1;p.qty=Math.round(((Number(p.qty)||0)+toBase(item.qty,item.unit).q/factor)*1e6)/1e6;p._receiptOps={...p._receiptOps,...operationIds};topped++;}
-  else{const id=crypto.randomUUID().replaceAll('-',''),value={name:item.name,qty:item.qty,unit:item.unit,section:item.section},category=autoCat(item.name);next[id]={...value,category:item.section==='household'?'Household':category==='Household'?'Other':category,threshold:0,_receiptOps:operationIds};added++;}
+  if(entry){const [,p]=entry,factor=['kg','L'].includes(p.unit)?1000:1;p.qty=Math.round(((Number(p.qty)||0)+toBase(item.qty,item.unit).q/factor)*1e6)/1e6;p._receiptOps={...p._receiptOps,[item.receiptLineId]:Date.now()};topped++;}
+  else{const id=crypto.randomUUID().replaceAll('-',''),value={name:item.name,qty:item.qty,unit:item.unit,section:item.section},category=autoCat(item.name);next[id]={...value,category:item.section==='household'?'Household':category==='Household'?'Other':category,threshold:0,_receiptOps:{[item.receiptLineId]:Date.now()}};added++;}
  }
  if(!added&&!topped)return {added,topped,skipped};DB.pantry=next;try{saveLocal();}catch(e){DB.pantry=current;throw e;}return {added,topped,skipped};
 };
