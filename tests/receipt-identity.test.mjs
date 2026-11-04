@@ -138,6 +138,17 @@ test('verified retailer SKU and receipt words resolve opaque products without an
  const doc=documentFrom([{lines:text.split('\n'),labels:[]}],{name:'synthetic.jpg'},{ai:true});
  assert.deepEqual(doc.items.map(row=>row.name),['Tortilla chips','Nacho cheese sauce']);
 });
+test('a printed merchant prefix can be removed while keeping the product and receipt evidence',()=>{
+ const text='CITRUS SPICE GROCERIES\nCITRUS SPICE WHOLE WHEAT FLOUR 2KG $3.49\nCITRUS SPICE RAW CASHEW 4 LB $8.99\nTOTAL $12.48';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.section,row.nameSource]),[['Whole wheat flour','kitchen','merchant-prefix'],['Raw cashew','kitchen','merchant-prefix']]);
+ assert.deepEqual(rows.map(row=>[row.receiptName,row.amount]),[['CITRUS SPICE WHOLE WHEAT FLOUR','3.49'],['CITRUS SPICE RAW CASHEW','8.99']]);
+ assert.equal(rows[0].raw,'CITRUS SPICE WHOLE WHEAT FLOUR 2KG $3.49');
+ assert.equal(identifyReceiptItems(parseReceipt(text),[],'OTHER GROCERIES\n'+text.split('\n').slice(1).join('\n'))[0].name,'CITRUS SPICE WHOLE WHEAT FLOUR');
+ assert.equal(identifyReceiptItems([{name:'CITRUS SPICE 2L',raw:'CITRUS SPICE 2L $3.49',amount:'3.49'}],[],text)[0].name,'CITRUS SPICE 2L');
+ const firstProduct='TEST BRAND WHIPPING CREAM 35%\n$4.00\nTEST BRAND WHIPPING CREAM 35% $4.00';
+ assert.equal(identifyReceiptItems([{name:'TEST BRAND WHIPPING CREAM 35%',raw:'TEST BRAND WHIPPING CREAM 35% $4.00',amount:'4.00'}],[],firstProduct)[0].name,'TEST BRAND WHIPPING CREAM 35%');
+});
 test('Costco household products use verified SKU and printed words while retaining receipt evidence',()=>{
  const receiptText='COSTCO WHOLESALE\n1974989 EVRST 12X600 42.99 H\n2633624 CHARMIN ULTR 32.49 H\n3458556 TIDE COLDWTR 27.99 H';
  const rows=[['1974989','EVRST 12X600','42.99'],['2633624','CHARMIN ULTR','32.49'],['3458556','TIDE COLDWTR','27.99'],['3458556','TIDE COLDWTR','27.99']].map(([itemNumber,name,amount])=>({itemNumber,name,amount,qty:1,unit:'pcs',raw:itemNumber+' '+name+' '+amount+' H'}));
