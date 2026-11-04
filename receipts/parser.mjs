@@ -27,7 +27,7 @@ function repairReconciledRateGlyph(line,knownTotal=null){
 function printedDepartment(line){
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
- const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
+ const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z0-9]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
  if(!numbered)return '';
  const label=numbered[1].toUpperCase();
  function oneEdit(a,b){
@@ -42,8 +42,8 @@ function printedDepartment(line){
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
- const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/-]+[A-Z]?)\s+(?=[A-Z])/i);
- if(!match||(match[1].match(/\d/g)||[]).length<4||!/[(*#:/]/.test(match[1])&&!/\d[A-Z]$/i.test(match[1]))return name;
+ const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|-]+[A-Z]?)\s+(?=[A-Z])/i);
+ if(!match||(match[1].match(/\d/g)||[]).length<4||!/[(*#:/!|]/.test(match[1])&&!/\d[A-Z]$/i.test(match[1]))return name;
  return name.slice(match[0].length);
 }
 function quantity(body){

@@ -28,6 +28,17 @@ test('OCR-damaged numeric item codes do not become product names',()=>{
  assert.equal(parseReceipt('2026/10/24 TEST NOTE $1.00')[0].name,'2026/10/24 TEST NOTE');
 });
 
+test('a digit-damaged department heading stays separate from the next priced product',()=>{
+ const text='21-6ROCERY\n03904700115 TEST SHORTBREAD $5.49\n0333836!162 TEST ROMAINE $4.99\n41-HOME\n123456 TEST SOAP $2.49\nSUBTOTAL $12.97';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,department})=>({name,amount,department})),[
+  {name:'TEST SHORTBREAD',amount:'5.49',department:'kitchen'},
+  {name:'TEST ROMAINE',amount:'4.99',department:'kitchen'},
+  {name:'TEST SOAP',amount:'2.49',department:'household'},
+ ]);
+ assert.equal(rows[1].raw,'0333836!162 TEST ROMAINE $4.99');
+});
+
 test('repeated OCR decoration cannot merge a basket heading into the first priced product',()=>{
  const rows=parseReceipt('哈哈哈哈哈哈 BASKET HEADER\n1234567 TEST OATS $4.25\n1234568 TEST RICE $5.50\nTOTAL $9.75');
  assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[
