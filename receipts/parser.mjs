@@ -2,9 +2,9 @@
 import {printedReceiptCount} from './metadata.mjs';
 const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
-const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}[\d\[\]]{0,2})?$`,'i');
+const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})\.?(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*]{1,4}[\d\[\]]{0,2})?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
-const noise=/^(?:(?:(?:sub[\s-]*|grand\s*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
+const noise=/^(?:(?:(?:sub[\s-]*|grand\s*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
@@ -52,7 +52,11 @@ function quantity(body){
  const counted=name.match(/^(\d{1,3})\s+(\d{3}-\d{4}-\d|\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×]\s*/i);
  if(counted){count=Number(counted[1]);name=name.slice(counted[1].length).trim();known=true;}
  if(lead){count=Number(lead[1]);name=name.slice(lead[0].length);known=true;}
- const itemNumber=name.match(/^(\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i')),weight=multi?null:name.match(measurement);
+ const itemNumber=name.match(/^(\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i'));
+ const candidateWeight=multi?null:name.match(measurement);
+ // POS item codes can precede a store prefix such as "PC". The code is an
+ // identifier, not a count of pieces, even though "pc" is also a unit.
+ const weight=candidateWeight?.index===0&&itemNumber&&candidateWeight[1]===itemNumber?null:candidateWeight;
  if(multi){count*=Number(multi[1]);known=true;}
  let value={qty:count,unit:'pcs'};if(weight){value=measured(num(weight[1])*count,weight[2]);name=name.replace(weight[0],' ').trim();known=true;}
  if(multi){value=measured(num(multi[2])*count,multi[3]);name=name.replace(multi[0],' ').trim();}

@@ -13,6 +13,29 @@ test('hyphenated stock numbers stay separate from names and measurements',()=>{
  assert.equal(other[1].itemNumber,undefined);assert.ok(other[1].name.startsWith('555-010-1234'));
 });
 
+test('a numeric item code before PC is not a billion-piece package',()=>{
+ const row=parseReceiptFields({label:'06038389781 PC GIGANTICO BUN MRJ',amount:'12.00',quantityLine:'4 @ $3.00 MRJ'});
+ assert.equal(row.name,'PC GIGANTICO BUN');
+ assert.equal(row.itemNumber,'06038389781');
+ assert.equal(row.qty,4);
+ assert.equal(row.unit,'pcs');
+ assert.equal(row.packSize,undefined);
+ assert.equal(row.warning,undefined);
+});
+
+test('a terminal OCR dot after a price does not merge adjacent purchases',()=>{
+ const rows=parseReceipt('4032 WMELON RED SDLS MRJ 3.44.\n(2)4090 SPINACH BUNCHED MRJ\n2 @ $2.79 5.58\nSUBTOTAL 9.02');
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'WMELON RED SDLS',amount:'3.44',qty:1},
+  {name:'SPINACH BUNCHED',amount:'5.58',qty:2},
+ ]);
+ const offers=parseReceipt("TEST YOGURT 5.99\nIn-Sture Offers 500 Pts\n(3)18275700051 BRAR'S MALAI PAN MRJ\n3 @ $6.29 18.87\nSUBTOTAL 24.86");
+ assert.deepEqual(offers.map(({name,amount})=>({name,amount})),[
+  {name:'TEST YOGURT',amount:'5.99'},
+  {name:"BRAR'S MALAI PAN",amount:'18.87'},
+ ]);
+});
+
 test('OCR-damaged numeric item codes do not become product names',()=>{
  const rows=parseReceiptFields({label:'057379(501 TEST WATERS',amount:'4.75'});
  assert.equal(rows.name,'TEST WATERS');assert.equal(rows.raw,'057379(501 TEST WATERS $4.75');
