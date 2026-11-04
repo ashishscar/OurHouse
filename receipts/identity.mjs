@@ -6,7 +6,10 @@ const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',
 // numbers alone are not proof of a product identity. No receipt is sent out.
 const verifiedCatalog={costco:{
  '161552':{terms:['QUE','PASA'],name:'Tortilla chips',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-que-pasa-tortilla-chips-908-g/100541978'},
- '1081570':{terms:['CHEESE','SA'],name:'Nacho cheese sauce',section:'kitchen',source:'https://www.costco.ca/p/-/muy-fresco-nacho-cheese-sauce-3-kg/100498751'}
+ '1081570':{terms:['CHEESE','SA'],name:'Nacho cheese sauce',section:'kitchen',source:'https://www.costco.ca/p/-/muy-fresco-nacho-cheese-sauce-3-kg/100498751'},
+ '1974989':{terms:['EVRST','12X600'],name:'White towel rolls',section:'household',source:'https://www.costco.ca/p/-/everest-pro-signature-white-towel-roll-197-cm-x-18288-m/4000393138'},
+ '2633624':{terms:['CHARMIN','ULTR'],name:'Toilet paper',section:'household',source:'https://www.costco.ca/p/-/charmin-ultra-soft-toilet-paper-jumbo-rolls-30-200-sheets/4000399694'},
+ '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'}
 }};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
@@ -61,8 +64,19 @@ export function qualifiedReceiptName(proposed,receiptName){
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
 function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9%]+/g,' ').trim();}
-function catalogMatch(row,receiptText){
- if(!/^\s*COSTCO(?:\s+WHOLESALE)?\b/im.test(receiptText))return null;
+function costcoEvidence(receiptText){
+ if(/^\s*COSTCO(?:\s+WHOLESALE)?\b/im.test(receiptText))return true;
+ const lines=String(receiptText||'').split(/\r?\n/),first=lines.find(line=>line.trim())||'';
+ // An identified different merchant rules out this retailer's SKU catalog.
+ if(/\b(?:store|supermarket|market|mart|wholesale|no frills|canadian tire|walmart|target)\b/i.test(first))return false;
+ // Cropped or faint logos are common. Two independent SKU-plus-label matches
+ // establish the retailer without guessing from an isolated number.
+ const matches=new Set();
+ for(const line of lines){const match=line.match(/^\s*(\d{5,8})\s+(.+)$/);if(!match)continue;const entry=verifiedCatalog.costco[match[1]];if(!entry)continue;const printed=new Set(labelKey(match[2]).split(' '));if(entry.terms.every(term=>printed.has(term)))matches.add(match[1]);}
+ return matches.size>=2;
+}
+function catalogMatch(row,isCostco){
+ if(!isCostco)return null;
  const entry=verifiedCatalog.costco[String(row.itemNumber||'').trim()];
  if(!entry)return null;
  const printed=new Set(labelKey(row.receiptName||row.name).split(' '));
@@ -116,10 +130,11 @@ function repeatedNames(items){
  return items;
 }
 export function identifyReceiptItems(rows,annotations=[],receiptText=''){
+ const isCostco=costcoEvidence(receiptText);
  return repeatedNames(reconcileRepeatedLabels(rows).map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
-  const clear=receiptSection(receiptName),catalog=catalogMatch(row,receiptText),verified=catalog&&(!clear||clear===catalog.section)?catalog:null;
+  const clear=receiptSection(receiptName),catalog=catalogMatch(row,isCostco),verified=catalog&&(!clear||clear===catalog.section)?catalog:null;
   const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:suggestions.length===1?suggestions[0].trim():receiptName;
   const sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.

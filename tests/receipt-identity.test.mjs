@@ -138,6 +138,19 @@ test('verified retailer SKU and receipt words resolve opaque products without an
  const doc=documentFrom([{lines:text.split('\n'),labels:[]}],{name:'synthetic.jpg'},{ai:true});
  assert.deepEqual(doc.items.map(row=>row.name),['Tortilla chips','Nacho cheese sauce']);
 });
+test('Costco household products use verified SKU and printed words while retaining receipt evidence',()=>{
+ const receiptText='COSTCO WHOLESALE\n1974989 EVRST 12X600 42.99 H\n2633624 CHARMIN ULTR 32.49 H\n3458556 TIDE COLDWTR 27.99 H';
+ const rows=[['1974989','EVRST 12X600','42.99'],['2633624','CHARMIN ULTR','32.49'],['3458556','TIDE COLDWTR','27.99'],['3458556','TIDE COLDWTR','27.99']].map(([itemNumber,name,amount])=>({itemNumber,name,amount,qty:1,unit:'pcs',raw:itemNumber+' '+name+' '+amount+' H'}));
+ const named=identifyReceiptItems(rows,[],receiptText);
+ assert.deepEqual(named.map(row=>[row.name,row.section]),[['White towel rolls','household'],['Toilet paper','household'],['Coldwater laundry detergent','household'],['Coldwater laundry detergent','household']]);
+ assert.ok(named.every((row,i)=>row.nameSource==='verified-catalog'&&row.receiptName===rows[i].name&&row.raw===rows[i].raw&&row.amount===rows[i].amount&&row.qty===1));
+ const missingHeader=receiptText.split('\n').slice(1).join('\n');
+ assert.deepEqual(identifyReceiptItems(rows,[],missingHeader).map(row=>row.name),named.map(row=>row.name));
+ assert.equal(identifyReceiptItems([rows[0]],[],missingHeader.split('\n')[0])[0].name,'EVRST 12X600');
+ assert.equal(identifyReceiptItems([rows[0]],[],'OTHER STORE')[0].name,'EVRST 12X600');
+ assert.equal(identifyReceiptItems(rows,[],'OTHER STORE\n'+missingHeader)[0].name,'EVRST 12X600');
+ assert.equal(identifyReceiptItems([{...rows[0],name:'EVRST SOAP'}],[],receiptText)[0].name,'EVRST SOAP');
+});
 test('repeated item numbers repair one-letter OCR labels without merging purchases or hiding source lines',()=>{
  const lines=['123456 TEST TOVATO $2.11','123456 TEST TOMATO $3.22','123456 TEST TOMATO $4.33','654321 TEST TOVATO $5.44'];
  const rows=identifyReceiptItems(parseReceipt(lines.join('\n')));
