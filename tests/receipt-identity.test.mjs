@@ -122,3 +122,17 @@ test('document evidence and product identity remain separate from quantities, am
  const doc=documentFrom([{lines,labels:[{line:0,name:'35% Whipping cream',section:'pantry'},{line:1,name:'35% Whipping cream',section:'pantry'},{line:2,name:'Soap',section:'household'},{line:3,name:'Grocery',section:'unknown'}]}],{name:'synthetic.jpg'},{ai:true});
  assert.equal(doc.items.length,4);assert.deepEqual(doc.items.map(r=>r.name),['35% Whipping cream','35% Whipping cream','Soap','Grocery']);assert.equal(doc.items[0].qty,1);assert.equal(doc.items[0].amount,'4.00');assert.equal(doc.items[0].receiptName,'TEST BRAND WHIPPING CREAM 35%');assert.equal(doc.items[2].section,'household');assert.equal(doc.items[3].section,'');assert.equal(doc.ocr.text,lines.join('\n'));assert.deepEqual(doc.ocr.sections[0].lines,lines);assert.deepEqual(doc.audit.warnings,[]);
 });
+test('verified retailer SKU and receipt words resolve opaque products without an outside scan request',()=>{
+ const text='COSTCO WHOLESALE\n161552 KS QUE PASA $6.99\n1081570 MF CHEESE SA $13.99\nTOTAL $20.98';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.section,row.nameSource]),[['Tortilla chips','kitchen','verified-catalog'],['Nacho cheese sauce','kitchen','verified-catalog']]);
+ assert.deepEqual(rows.map(row=>[row.receiptName,row.amount]),[['KS QUE PASA','6.99'],['MF CHEESE SA','13.99']]);
+ const wrongStore=identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(1).join('\n'));
+ assert.deepEqual(wrongStore.map(row=>row.name),['KS QUE PASA','MF CHEESE SA']);
+ const wrongLabel=identifyReceiptItems([{name:'KS OTHER ITEM',itemNumber:'161552',raw:'161552 KS OTHER ITEM $6.99',amount:'6.99'}],[],text);
+ assert.equal(wrongLabel[0].name,'KS OTHER ITEM');
+ const conflicting=identifyReceiptItems([{name:'KS QUE PASA SOAP',itemNumber:'161552',raw:'161552 KS QUE PASA SOAP $6.99',amount:'6.99'}],[],text);
+ assert.equal(conflicting[0].name,'KS QUE PASA SOAP');assert.equal(conflicting[0].section,'household');
+ const doc=documentFrom([{lines:text.split('\n'),labels:[]}],{name:'synthetic.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>row.name),['Tortilla chips','Nacho cheese sauce']);
+});

@@ -1,6 +1,13 @@
 // Suggestions never replace source evidence, quantities or prices. Unknown
 // identities keep the printed label; a section remains editable before import.
 const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
+// Public retailer records are an optional, exact-SKU fallback for opaque till
+// labels. An entry needs the retailer header and printed product words too;
+// numbers alone are not proof of a product identity. No receipt is sent out.
+const verifiedCatalog={costco:{
+ '161552':{terms:['QUE','PASA'],name:'Tortilla chips',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-que-pasa-tortilla-chips-908-g/100541978'},
+ '1081570':{terms:['CHEESE','SA'],name:'Nacho cheese sauce',section:'kitchen',source:'https://www.costco.ca/p/-/muy-fresco-nacho-cheese-sauce-3-kg/100498751'}
+}};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
 protectedWords.add('eggplant');
@@ -49,6 +56,13 @@ export function qualifiedReceiptName(proposed,receiptName){
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
 function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9%]+/g,' ').trim();}
+function catalogMatch(row,receiptText){
+ if(!/^\s*COSTCO(?:\s+WHOLESALE)?\b/im.test(receiptText))return null;
+ const entry=verifiedCatalog.costco[String(row.itemNumber||'').trim()];
+ if(!entry)return null;
+ const printed=new Set(labelKey(row.receiptName||row.name).split(' '));
+ return entry.terms.every(term=>printed.has(term))?entry:null;
+}
 function withinTwoEdits(a,b){
  if(Math.abs(a.length-b.length)>2)return false;
  let previous=Array.from({length:b.length+1},(_,i)=>i);
@@ -80,16 +94,17 @@ function repeatedNames(items){
  }
  return items;
 }
-export function identifyReceiptItems(rows,annotations=[]){
+export function identifyReceiptItems(rows,annotations=[],receiptText=''){
  return repeatedNames(rows.map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
-  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':suggestions.length===1?suggestions[0].trim():receiptName;
-  const clear=receiptSection(receiptName),sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
+  const clear=receiptSection(receiptName),catalog=catalogMatch(row,receiptText),verified=catalog&&(!clear||clear===catalog.section)?catalog:null;
+  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:suggestions.length===1?suggestions[0].trim():receiptName;
+  const sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
-  const section=clear||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,nameSource:name===receiptName?'receipt':'suggestion'};
+  const section=clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
+  return {...row,name,receiptName,section,nameSource:verified?'verified-catalog':name===receiptName?'receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }
