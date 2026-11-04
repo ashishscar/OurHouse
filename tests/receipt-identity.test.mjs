@@ -25,6 +25,8 @@ test('an opaque receipt label can drop only an explicit pack size',()=>{
  assert.equal(named.receiptName,row.name);
  assert.equal(named.raw,row.raw);
  assert.equal(named.amount,row.amount);
+ assert.equal(qualifiedReceiptName('TEX white','DEMP TEX WHT'),'');
+ assert.equal(qualifiedReceiptName('Beads','DOWNY BEADS'),'');
 });
 test('opaque brand-only names retain their printed order',()=>{
  assert.equal(qualifiedReceiptName('CLASSIC LAYS','LAYS CLASSIC'),'LAYS CLASSIC');

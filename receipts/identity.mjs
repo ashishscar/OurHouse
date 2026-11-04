@@ -27,6 +27,11 @@ export function supportedName(proposed,receiptName){
  const packToken=w=>/^(?:\d+(?:decimal\d+)?(?:g|gm|kg|lb|oz|ml|l|lt|litre|liter|pc|pcs|pk|pack))$/.test(w);
  const omittedOnlyUnits=[...source].every(w=>actual.has(w)||['each','ea','pc','pcs','unit'].includes(w)||packToken(w));
  if(candidate.length<source.size&&!readable&&!omittedOnlyUnits)return false;
+ // Dropping an unexplained word can create a neat but meaningless fragment.
+ // Keep the printed label unless an abbreviated candidate still has a product
+ // identity; a household label cannot become a generic unidentified noun.
+ const meaningful=candidate.some(w=>!qualifiersOnly.has(w)&&(protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||(w.length>=5&&(w.match(/[aeiou]/g)||[]).length>=2)));
+ if(candidate.length<source.size&&!omittedOnlyUnits&&(!meaningful||receiptSection(receiptName)==='household'&&!receiptSection(proposed)))return false;
  // Do not erase a visible type/flavour or a fat percentage while removing a brand.
  for(const word of source)if((protectedWords.has(word)||protectedWords.has(word.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(word))&&!actual.has(word))return false;
  return true;
