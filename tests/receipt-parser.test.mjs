@@ -63,6 +63,15 @@ test('a currency glyph read as s is repaired only when quantity and line total r
  assert.deepEqual(parseReceipt('TEST MALAI PAN\n3 @ s6.29 17.87\nTEST YOGURT 5.99').map(row=>row.name),['TEST YOGURT']);
 });
 
+test('a printed POS marker after the unit price does not hide purchased quantity',()=>{
+ const row=parseReceiptFields({label:'SPINACH BUNCHED',amount:'5.58',quantityLine:'2 @ $2.79 MRJ'});
+ assert.equal(row.qty,2);assert.equal(row.unit,'pcs');assert.equal(row.unitPrice,'2.79');assert.equal(row.warning,undefined);
+ assert.match(row.raw,/2 @ \$2\.79 MRJ/);
+ assert.deepEqual(parseReceipt('SPINACH BUNCHED 5.58\n2 @ $2.79 MRJ\nTOTAL 5.58').map(item=>[item.name,item.qty,item.amount]),[['SPINACH BUNCHED',2,'5.58']]);
+ const unknown=parseReceiptFields({label:'SPINACH BUNCHED',amount:'5.58',quantityLine:'2 @ $2.79 EXTRA'});
+ assert.equal(unknown.qty,1);assert.match(unknown.warning,/not understood/);
+});
+
 test('a wrapped package size below the current priced product adds stock without changing price',()=>{
  const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
  assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
