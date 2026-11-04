@@ -41,6 +41,7 @@ test('OCR-damaged numeric item codes do not become product names',()=>{
  assert.equal(rows.name,'TEST WATERS');assert.equal(rows.raw,'057379(501 TEST WATERS $4.75');
  const lines=parseReceipt('0603838:100 TEST CORN $4.99\n252411V TEST PEPPER $10.99\n*4087 TEST TOMATO $3.00');
  assert.deepEqual(lines.map(r=>r.name),['TEST CORN','TEST PEPPER','TEST TOMATO']);
+ assert.equal(parseReceipt('(2)0333#367101 TEST CUCUMBER $2.58')[0].name,'TEST CUCUMBER');
  assert.equal(parseReceipt('2026-10-24 TEST NOTE $1.00')[0].name,'2026-10-24 TEST NOTE');
  assert.equal(parseReceipt('7UP TEST SODA $2.00')[0].name,'7UP TEST SODA');
  const slash=parseReceipt('98765432/123 TEST OATS $3.99\nTOTAL $3.99')[0];

@@ -42,7 +42,7 @@ function printedDepartment(line){
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
- const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|-]+[A-Z]?)\s+(?=[A-Z])/i);
+ const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|#-]+[A-Z]?)\s+(?=[A-Z])/i);
  if(!match||(match[1].match(/\d/g)||[]).length<4||!/[(*#:/!|]/.test(match[1])&&!/\d[A-Z]$/i.test(match[1]))return name;
  return name.slice(match[0].length);
 }
