@@ -138,3 +138,17 @@ test('verified retailer SKU and receipt words resolve opaque products without an
  const doc=documentFrom([{lines:text.split('\n'),labels:[]}],{name:'synthetic.jpg'},{ai:true});
  assert.deepEqual(doc.items.map(row=>row.name),['Tortilla chips','Nacho cheese sauce']);
 });
+test('repeated item numbers repair one-letter OCR labels without merging purchases or hiding source lines',()=>{
+ const lines=['123456 TEST TOVATO $2.11','123456 TEST TOMATO $3.22','123456 TEST TOMATO $4.33','654321 TEST TOVATO $5.44'];
+ const rows=identifyReceiptItems(parseReceipt(lines.join('\n')));
+ assert.equal(rows.length,4);
+ assert.deepEqual(rows.map(row=>row.receiptName),['TEST TOMATO','TEST TOMATO','TEST TOMATO','TEST TOVATO']);
+ assert.equal(rows[0].ocrName,'TEST TOVATO');assert.equal(rows[0].nameSource,'repeated-label');
+ assert.deepEqual(rows.map(row=>row.amount),['2.11','3.22','4.33','5.44']);
+ assert.equal(rows[0].raw,lines[0]);assert.equal(rows[3].raw,lines[3]);
+ const doc=documentFrom([{lines,labels:[]}],{name:'synthetic.jpg'},{ai:true});
+ assert.equal(doc.items[0].receiptName,'TEST TOMATO');assert.equal(doc.items[0].ocrName,'TEST TOVATO');
+ assert.equal(doc.ocr.text,lines.join('\n'));
+ const variants=identifyReceiptItems(parseReceipt('123456 TEST TOMATO $2.11\n123456 TEST POTATO $3.22'));
+ assert.deepEqual(variants.map(row=>row.receiptName),['TEST TOMATO','TEST POTATO']);
+});

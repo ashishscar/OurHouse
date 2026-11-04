@@ -77,6 +77,22 @@ function withinTwoEdits(a,b){
  }
  return previous[b.length]<=2;
 }
+function reconcileRepeatedLabels(rows){
+ const copied=rows.map(row=>({...row})),byCode=new Map();
+ for(const row of copied){const code=String(row.itemNumber||'').trim();if(code.length<4)continue;if(!byCode.has(code))byCode.set(code,[]);byCode.get(code).push(row);}
+ for(const bucket of byCode.values()){
+  if(bucket.length<2)continue;
+  const anchored=bucket.filter(row=>receiptSection(row.receiptName||row.name));
+  if(!anchored.length||new Set(anchored.map(row=>labelKey(row.receiptName||row.name))).size!==1)continue;
+  const anchor=anchored[0],label=labelKey(anchor.receiptName||anchor.name),digits=label.match(/\d+/g)?.join(',')||'',wordCount=label.split(' ').length;
+  for(const row of bucket){
+   const original=row.receiptName||row.name,own=labelKey(original);
+   if(row===anchor||own===label||receiptSection(original)||own.length<8||own.split(' ').length!==wordCount||(own.match(/\d+/g)?.join(',')||'')!==digits||!withinTwoEdits(own,label))continue;
+   row.ocrName=original;row.receiptName=anchor.receiptName||anchor.name;
+  }
+ }
+ return copied;
+}
 function repeatedNames(items){
  const buckets=new Map();
  for(const item of items){
@@ -93,14 +109,14 @@ function repeatedNames(items){
   const anchor=candidates.find(item=>labelKey(item.receiptName)===label),digits=label.match(/\d+/g)?.join(',')||'',wordsCount=label.split(' ').length;
   for(const item of bucket){
    const own=labelKey(item.receiptName);
-   if(item===anchor||item.nameSource!=='receipt'||(item.section&&item.section!==anchor.section)||own.length<8||own.split(' ').length!==wordsCount||(own.match(/\d+/g)?.join(',')||'')!==digits||!withinTwoEdits(own,label))continue;
+   if(item===anchor||!['receipt','repeated-label'].includes(item.nameSource)||(item.section&&item.section!==anchor.section)||own.length<8||own.split(' ').length!==wordsCount||(own.match(/\d+/g)?.join(',')||'')!==digits||!withinTwoEdits(own,label))continue;
    item.name=anchor.name;item.nameSource='repeated';
   }
  }
  return items;
 }
 export function identifyReceiptItems(rows,annotations=[],receiptText=''){
- return repeatedNames(rows.map(row=>{
+ return repeatedNames(reconcileRepeatedLabels(rows).map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
   const clear=receiptSection(receiptName),catalog=catalogMatch(row,receiptText),verified=catalog&&(!clear||clear===catalog.section)?catalog:null;
@@ -110,6 +126,6 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
   const section=clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,nameSource:verified?'verified-catalog':name===receiptName?'receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
+  return {...row,name,receiptName,section,nameSource:verified?'verified-catalog':name===receiptName?(row.ocrName?'repeated-label':'receipt'):'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }
