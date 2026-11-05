@@ -106,6 +106,14 @@ export function parseReceipt(text){
  for(const [lineIndex,line] of lines.entries()){
   if(consumed.has(lineIndex))continue;
   if(orphanPrice&&lineIndex>orphanPrice.lineIndex+1)orphanPrice=null;
+  // Some tills print product-like loyalty labels followed by points and an
+  // OCR-damaged subtotal. End purchases only for a real points footer: a
+  // heading, several points lines, and a nearby printed total. A single
+  // points offer between purchases must not truncate the basket.
+  if(rows.length&&/^bonus\s+points\b/i.test(line)){
+   const tail=lines.slice(lineIndex,Math.min(lines.length,lineIndex+16));
+   if(tail.filter(entry=>/\b\d+\s*(?:pts|points)\b/i.test(entry)).length>=3&&tail.some(entry=>/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(entry.replace(/^[*\s]+/,''))))break;
+  }
   const nextDepartment=printedDepartment(line);
   if(nextDepartment){finishRate(undefined,false);department=nextDepartment;pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;

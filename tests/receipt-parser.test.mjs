@@ -271,3 +271,10 @@ test('a partial basket count never replaces the whole receipt count',()=>{
  const missing=auditReceipt(text+'\nNumber of items: 3');
  assert.match(missing.warnings[0],/3 purchased units/);
 });
+
+test('a loyalty points footer cannot become another purchase when its subtotal is damaged',()=>{
+ const text='BREAD $2.50\nBonus Points 1 Pts\nCUCUMBERS 400 Pts\n200 Pts\nWONDER BREAD 300 Pts\naVTES 154.24\nNO NAME COOKIES\nSUBTOTAL\nTOTAL 155.08';
+ assert.deepEqual(parseReceipt(text).map(row=>[row.name,row.amount]),[['BREAD','2.50']]);
+ const offer='OATS $3.00\nBonus Points 100 Pts\nRICE $4.00\nSUBTOTAL $7.00';
+ assert.deepEqual(parseReceipt(offer).map(row=>row.name),['OATS','RICE']);
+});
