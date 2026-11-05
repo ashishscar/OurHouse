@@ -106,6 +106,7 @@ test('unnumbered repeated purchases use a unique printed spelling without mergin
  const fixed=identifyReceiptItems(rows);
  assert.equal(fixed.length,5);
  assert.deepEqual(fixed.map(row=>row.name),Array(5).fill('35% Lactantia Whipping Cream'));
+ assert.deepEqual(fixed.map(row=>row.section),Array(5).fill('kitchen'));
  assert.equal(fixed[1].receiptName,names[1]);
  assert.equal(fixed[3].receiptName,names[3]);
  assert.equal(fixed[3].raw,rows[3].raw);

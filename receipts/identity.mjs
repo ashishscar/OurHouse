@@ -163,7 +163,7 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
  return repeatedNames(reconcileRepeatedLabels(rows).map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
-  const clear=receiptSection(receiptName),catalog=catalogMatch(row,isCostco),verified=catalog&&(!clear||clear===catalog.section)?catalog:null,merchantName=merchantProduct(receiptName,receiptText);
+  const clear=receiptSection(receiptName)||receiptSection(row.repeatedName),catalog=catalogMatch(row,isCostco),verified=catalog&&(!clear||clear===catalog.section)?catalog:null,merchantName=merchantProduct(receiptName,receiptText);
   const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:merchantName||(suggestions.length===1?suggestions[0].trim():row.repeatedName||receiptName);
   const sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
