@@ -44,3 +44,14 @@ test('an ambiguous amount cannot be rescued onto a sale notice',()=>{
  assert.deepEqual(result.lines,record.texts);
  assert.equal(result.remaining_ambiguous,1);
 });
+
+test('a tax marker remains part of a price on an angled receipt',()=>{
+ const record={
+  texts:['Final Sale','Shopping Bag','$0.35 Tx1'],
+  boxes:[quad(10,10,90,12,.13),quad(10,40,90,12,.13),quad(160,40+.13*150,80,12,.13)],
+  scores:[.98,.98,.98],
+ };
+ const result=assembleSpatial(record);
+ assert.ok(result.lines.includes('Final Sale'));
+ assert.ok(result.lines.includes('Shopping Bag $0.35 Tx1'));
+});

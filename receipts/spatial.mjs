@@ -1,5 +1,5 @@
 // Assemble quadrilateral OCR boxes into receipt rows without changing literal text.
-const pricePattern=/^\s*\*?\s*(?:[-−]\s*)?\$?\s*\d+[.,]\d{2}(?:\s*[-−])?\s*[A-Z*]{0,3}\s*$/i;
+const pricePattern=/^\s*\*?\s*(?:[-−]\s*)?\$?\s*\d+[.,]\d{2}(?:\s*[-−])?\s*(?:[A-Z*]{0,3}|TX[1I\]])\s*$/i;
 const ratePattern=/(\d+(?:[.,]\d{1,3})?)\s*(?:kg|lbs?|g|ml|l|each|pcs?)?\s*@\s*\$?\s*(\d+[.,]\d{2})(?:\s*(?:per\s*(?:1\s*)?(?:kg|lbs?|g|ml|l)|\/(?:kg|lbs?|g|ml|l)|ea\.?))?\s*$/i;
 const priorRatePattern=/(\d+(?:[.,]\d{1,3})?)\s*(?:kg|lbs?|g|ml|l|each|pcs?)?\s*@\s*\$?\s*(\d+[.,]\d{2})\s*$/i;
 const moneyValue=s=>{const m=String(s).match(/\d+[.,]\d{2}/);return m?Math.round(Number(m[0].replace(',','.'))*100):null};
