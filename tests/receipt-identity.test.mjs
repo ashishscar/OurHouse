@@ -71,7 +71,7 @@ test('grounded name completion puts missing product types after their ingredient
  assert.equal(qualifiedReceiptName('Mango','TEST BRAND CHUTNEY PEACH'),'');
 });
 test('Pantry and Household use product words rather than substrings, with no forced section for opaque labels',()=>{
- for(const name of ['Milk','Green peas','Organic ginger','Chhas masala','Papad','Plastic-free water','NAYA WATERS','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
+ for(const name of ['Milk','Green peas','Organic ginger','Jaggery bucket 5 kg','Chhas masala','Papad','Plastic-free water','NAYA WATERS','TEST THR CHS RCH','TEST SSME BN','CORRIENDER EACH'])assert.equal(receiptSection(name),'kitchen');
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner','TIDE COLDWTR','DOWNY BEADS','COLGATE TP'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
 });
@@ -99,6 +99,22 @@ test('repeated purchases repair display names from another printed line while re
  const different=[row('35% FIELD WHIPPING CREAM'),row('25% FIELD WHIPPING CREAM'),row('35% FIELD WHIPPING CREAM')];
  const separated=identifyReceiptItems(different,[{source:different[0].raw,name:'35% Whipping cream',section:'pantry'},{source:different[2].raw,name:'35% Whipping cream',section:'pantry'}]);
  assert.equal(separated[1].name,'25% FIELD WHIPPING CREAM');
+});
+test('unnumbered repeated purchases use a unique printed spelling without merging lines',()=>{
+ const names=['35% Lactantia Whipping Cream','35% Lactantia Whipping Crean','35% Lactantia Whipping Cream','35% Lactantla Whipping Crean','35% Lactantia Whipping Cream'];
+ const rows=names.map(name=>({name,raw:name+' $8.99',amount:'8.99',qty:1,unit:'pcs'}));
+ const fixed=identifyReceiptItems(rows);
+ assert.equal(fixed.length,5);
+ assert.deepEqual(fixed.map(row=>row.name),Array(5).fill('35% Lactantia Whipping Cream'));
+ assert.equal(fixed[1].receiptName,names[1]);
+ assert.equal(fixed[3].receiptName,names[3]);
+ assert.equal(fixed[3].raw,rows[3].raw);
+ const distinct=identifyReceiptItems([
+  {name:'TEST MILD SAUCE',raw:'TEST MILD SAUCE $5.00',amount:'5.00',qty:1,unit:'pcs'},
+  {name:'TEST MILD SAUCE',raw:'TEST MILD SAUCE $5.00',amount:'5.00',qty:1,unit:'pcs'},
+  {name:'TEST WILD SAUCE',raw:'TEST WILD SAUCE $5.00',amount:'5.00',qty:1,unit:'pcs'},
+ ]);
+ assert.equal(distinct[2].receiptName,'TEST WILD SAUCE');
 });
 test('verified Costco household labels override conflicting model categories without changing evidence',()=>{
  for(const receiptName of ['TIDE COLDWTR','DOWNY BEADS','COLGATE TP']){

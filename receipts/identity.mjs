@@ -18,7 +18,7 @@ protectedWords.add('eggplant');
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai'.split(' '))protectedWords.add(word);
 const household=/\b(?:body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
-const food=/\b(?:milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron)\b/i;
+const food=/\b(?:milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron)\b/i;
 export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)?'kitchen':'';}
 export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
@@ -118,6 +118,22 @@ function reconcileRepeatedLabels(rows){
    row.ocrName=original;row.receiptName=anchor.receiptName||anchor.name;
   }
  }
+ // Some tills print the same unnumbered purchase on separate lines. A unique
+ // repeated spelling can repair OCR-only variants at the same price. Keep the
+ // original scan in raw and receiptName; never merge the purchases themselves.
+ const byPrice=new Map();
+ for(const row of copied){if(row.itemNumber||!row.amount)continue;const key=row.amount+':'+row.qty+':'+row.unit;if(!byPrice.has(key))byPrice.set(key,[]);byPrice.get(key).push(row);}
+ for(const bucket of byPrice.values()){
+  if(bucket.length<3)continue;
+  const counts=new Map();for(const row of bucket){const label=labelKey(row.receiptName||row.name);if(receiptSection(label))counts.set(label,(counts.get(label)||0)+1);}
+  const ranked=[...counts].sort((a,b)=>b[1]-a[1]);
+  if(!ranked.length||ranked[0][1]<2||ranked[0][1]===(ranked[1]?.[1]||0))continue;
+  const [label]=ranked[0],anchor=bucket.find(row=>labelKey(row.receiptName||row.name)===label),digits=label.match(/\d+/g)?.join(',')||'',wordCount=label.split(' ').length;
+  for(const row of bucket){const original=row.receiptName||row.name,own=labelKey(original);
+   if(own===label||row.ocrName||receiptSection(original)||own.length<8||own.split(' ').length!==wordCount||(own.match(/\d+/g)?.join(',')||'')!==digits||!withinTwoEdits(own,label))continue;
+   row.repeatedName=anchor.receiptName||anchor.name;
+  }
+ }
  return copied;
 }
 function repeatedNames(items){
@@ -148,12 +164,12 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
   const clear=receiptSection(receiptName),catalog=catalogMatch(row,isCostco),verified=catalog&&(!clear||clear===catalog.section)?catalog:null,merchantName=merchantProduct(receiptName,receiptText);
-  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:merchantName||(suggestions.length===1?suggestions[0].trim():receiptName);
+  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:merchantName||(suggestions.length===1?suggestions[0].trim():row.repeatedName||receiptName);
   const sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
   const section=clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':name===receiptName?(row.ocrName?'repeated-label':'receipt'):'suggestion',...(verified?{catalogSource:verified.source}:{})};
+  return {...row,name,receiptName,section,nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }

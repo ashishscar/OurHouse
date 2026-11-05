@@ -36,6 +36,25 @@ test('a terminal OCR dot after a price does not merge adjacent purchases',()=>{
  ]);
 });
 
+test('OCR letter O inside a printed metric pack size can be read as zero',()=>{
+ const rows=parseReceipt('MTR RICE IDLI MIX 50OGM 13.16\n4 @ $3.29\nSESAME SEED BROWN 80OGM 5.49\nCROWN 20OZ OATS 4.99');
+ assert.deepEqual(rows.map(({name,qty,unit})=>({name,qty,unit})),[
+  {name:'MTR RICE IDLI MIX',qty:2000,unit:'g'},
+  {name:'SESAME SEED BROWN',qty:800,unit:'g'},
+  {name:'CROWN OATS',qty:566.990463,unit:'g'},
+ ]);
+ assert.match(rows[0].raw,/50OGM/);
+});
+
+test('a single OCR-damaged tax marker after a printed price retains the purchase',()=>{
+ const rows=parseReceipt('3458556 TIDE COLDWTR 27.99 H\n3458556 TIDE COLDWTR 27.99 工\nSUBTOTAL 55.98');
+ assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[
+  {name:'TIDE COLDWTR',amount:'27.99'},
+  {name:'TIDE COLDWTR',amount:'27.99'},
+ ]);
+ assert.match(rows[1].raw,/27\.99 工/);
+});
+
 test('OCR-damaged numeric item codes do not become product names',()=>{
  const rows=parseReceiptFields({label:'057379(501 TEST WATERS',amount:'4.75'});
  assert.equal(rows.name,'TEST WATERS');assert.equal(rows.raw,'057379(501 TEST WATERS $4.75');

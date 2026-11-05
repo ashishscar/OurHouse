@@ -43,6 +43,9 @@ export function assembleSpatial(record,{threshold=1.5,margin=0.25}={}){
   for(let j=0;j<m;j++){
    const price=prices[j],negative=/[-−]/.test(price.text),promotion=/^(?:\d+\s+FOR\b|DISCOUNT\b|SAVINGS?\b|COUPON\b|(?:\d+\s+)?(?:TPD\s*\/|\/\s*\d))/i.test(text.trim());
    if(negative&&!promotion)continue;
+   // A sale notice is receipt metadata. A nearby positive amount still
+   // belongs to a printed product row, even when the columns are slanted.
+   if(!negative&&/^FINAL\s+SALE\b/i.test(text))continue;
    const labelRight=Math.max(...row.members.map(b=>b.x+b.width/2)),priceLeft=price.x-price.width/2;
    const descriptionDecimal=/^\d{3,14}\s+\D/.test(text)&&hasAmount&&!/[$₹£€]/.test(text)&&priceLeft-labelRight>a.h;
    if(hasAmount&&!descriptionDecimal&&!(negative&&promotion))continue;

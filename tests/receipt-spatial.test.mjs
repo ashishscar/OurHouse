@@ -24,3 +24,15 @@ test('an isolated amount cannot be assigned across distant receipt rows',()=>{
  assert.deepEqual(result.unmatched,[1]);
  assert.deepEqual(result.lines,['TEST OATS','$4.25']);
 });
+
+test('a sale notice cannot take a nearby repeated product price',()=>{
+ const record={
+  texts:['CREAM','CREAM','CREAM','Final Sale','$3.59','$3.59','$3.59'],
+  boxes:[quad(10,10,90,12),quad(10,50,90,12),quad(10,90,90,12),quad(10,102,90,12),quad(160,20,50,12),quad(160,60,50,12),quad(160,100,50,12)],
+  scores:Array(7).fill(.98),
+ };
+ const result=assembleSpatial(record);
+ assert.equal(result.lines.filter(line=>line==='CREAM $3.59').length,3);
+ assert.ok(result.lines.includes('Final Sale'));
+ assert.deepEqual(result.unmatched,[]);
+});
