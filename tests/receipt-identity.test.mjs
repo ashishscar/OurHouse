@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 import {parseReceipt} from '../receipts/parser.mjs';
+test('verified food types are pantry even when a receipt omits the word snack',()=>{
+ for(const label of ['DP SPICY VEGGIE BURGERS','DP ORIGINAL KHARI','MUZDA MAKHANIA','BALAJI CRUNCHEM','BR 5050 SWEET&SALTY FAMILY','COKE DIET'])assert.equal(receiptSection(label),'kitchen',label);
+ for(const label of ['BR 5050 FAMILY','UNKNOWN SWEET&SALTY FAMILY','COLDWTR CLEANER'])assert.notEqual(receiptSection(label),'kitchen',label);
+});
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
