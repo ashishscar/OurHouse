@@ -104,7 +104,7 @@ export function resolveOrphanPrices(record,assembly){
   let chosen=arithmetic.length===1?arithmetic[0]:null;
   if(!chosen){const spatial=[];
    for(let i=0;i<lines.length;i++){
-    const observation=assembly.observations[i];if(!observation.anchors?.length||observation.prices?.length||!/[A-Za-z]{3}/.test(lines[i])||/^\d{1,2}\s*[-–]|BONUS|SUBTOTAL|TOTAL|TAX|HST|GST|PTS\b/i.test(lines[i])||/\b\d{1,3}\s*@\s*\$?\d+[.,]\d{2}\b/i.test(lines[i]))continue;
+    const observation=assembly.observations[i];if(!observation.anchors?.length||observation.prices?.length||!/[A-Za-z]{3}/.test(lines[i])||/^\d{1,2}\s*[-–]|BONUS|SUBTOTAL|TOTAL|TAX|HST|GST|PTS\b|^FINAL\s+SALE\b/i.test(lines[i])||/\b\d{1,3}\s*@\s*\$?\d+[.,]\d{2}\b/i.test(lines[i]))continue;
     const d=spatialDistance(price,observation),right=Math.max(...observation.anchors.map(k=>boxes[k].x+boxes[k].width/2));
     if(d<=0.65&&price.x-price.width/2>right)spatial.push({i,reason:'unique-spatial-product',d});
    }

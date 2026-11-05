@@ -37,9 +37,10 @@ test('a terminal OCR dot after a price does not merge adjacent purchases',()=>{
 });
 
 test('OCR letter O inside a printed metric pack size can be read as zero',()=>{
- const rows=parseReceipt('MTR RICE IDLI MIX 50OGM 13.16\n4 @ $3.29\nSESAME SEED BROWN 80OGM 5.49\nCROWN 20OZ OATS 4.99');
+ const rows=parseReceipt('MTR RICE IDLI MIX 50OGM 13.16\n4 @ $3.29\nSESAME SEED BROWN 80OGM 5.49\nSESAME SEED BROWN 8O0GM 5.49\nCROWN 20OZ OATS 4.99');
  assert.deepEqual(rows.map(({name,qty,unit})=>({name,qty,unit})),[
   {name:'MTR RICE IDLI MIX',qty:2000,unit:'g'},
+  {name:'SESAME SEED BROWN',qty:800,unit:'g'},
   {name:'SESAME SEED BROWN',qty:800,unit:'g'},
   {name:'CROWN OATS',qty:566.990463,unit:'g'},
  ]);

@@ -49,7 +49,7 @@ function stripDamagedItemCode(name){
 function repairMeasurementZeros(name){
  // OCR sometimes prints O for zero inside an otherwise numeric pack size.
  // Only repair digits immediately followed by a known unit, never item words.
- return name.replace(/\b(\d{1,4})([Oo]{1,3})(?=(?:GMS?|KG|ML|LB|L)\b)/gi,(_,digits,zeros)=>digits+'0'.repeat(zeros.length));
+ return name.replace(/\b([\dOo]{2,5})(?=(?:GMS?|KG|ML|LB|L)\b)/gi,value=>/\d/.test(value)?value.replace(/[Oo]/g,'0'):value);
 }
 function quantity(body){
  let name=repairMeasurementZeros(body).replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ)\s*$/i,''),count=1,known=false;

@@ -36,3 +36,11 @@ test('a sale notice cannot take a nearby repeated product price',()=>{
  assert.ok(result.lines.includes('Final Sale'));
  assert.deepEqual(result.unmatched,[]);
 });
+
+test('an ambiguous amount cannot be rescued onto a sale notice',()=>{
+ const record={texts:['Final Sale','Shopping Bag','$0.35'],boxes:[quad(10,10,90,12),quad(10,60,90,12),quad(160,12,50,12)],scores:[.98,.98,.98]};
+ const assembly={lines:[...record.texts],observations:[{anchors:[0],prices:[]},{anchors:[1],prices:[]},{box:2,unassigned:true}],ambiguous:[2]};
+ const result=resolveOrphanPrices(record,assembly);
+ assert.deepEqual(result.lines,record.texts);
+ assert.equal(result.remaining_ambiguous,1);
+});
