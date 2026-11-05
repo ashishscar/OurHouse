@@ -197,3 +197,13 @@ test('repeated item numbers repair one-letter OCR labels without merging purchas
  const variants=identifyReceiptItems(parseReceipt('123456 TEST TOMATO $2.11\n123456 TEST POTATO $3.22'));
  assert.deepEqual(variants.map(row=>row.receiptName),['TEST TOMATO','TEST POTATO']);
 });
+test('two full repeated labels support one middle wrapped-line dropout at the same printed unit price',()=>{
+ const text='SAMPLEBOX SPICY CRACKER $2.25\nSPICY CRACKER $2.25\nSAMPLEBOX SPICY CRACKER\n13 @ $2.25ea. $29.25\nSUBTOTAL $33.75';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>row.receiptName),Array(3).fill('SAMPLEBOX SPICY CRACKER'));
+ assert.deepEqual(rows.map(row=>row.amount),['2.25','2.25','29.25']);
+ assert.equal(rows[1].raw,'SPICY CRACKER $2.25');
+ assert.equal(rows[1].ocrName,'SPICY CRACKER');
+ const different=identifyReceiptItems(parseReceipt(text.replace('SPICY CRACKER $2.25','SPICY CRACKER $2.35')),[],text);
+ assert.equal(different[1].receiptName,'SPICY CRACKER');
+});

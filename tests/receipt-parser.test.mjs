@@ -273,8 +273,19 @@ test('a partial basket count never replaces the whole receipt count',()=>{
 });
 
 test('a loyalty points footer cannot become another purchase when its subtotal is damaged',()=>{
- const text='BREAD $2.50\nBonus Points 1 Pts\nCUCUMBERS 400 Pts\n200 Pts\nWONDER BREAD 300 Pts\naVTES 154.24\nNO NAME COOKIES\nSUBTOTAL\nTOTAL 155.08';
- assert.deepEqual(parseReceipt(text).map(row=>[row.name,row.amount]),[['BREAD','2.50']]);
+ const text='BREAD $2.75\nBonus Points 1 Pts\nFRUIT 400 Pts\n200 Pts\nSAMPLE BREAD 300 Pts\naVTES 34.56\nSAMPLE COOKIES\nSUBTOTAL\nTOTAL 35.12';
+ assert.deepEqual(parseReceipt(text).map(row=>[row.name,row.amount]),[['BREAD','2.75']]);
  const offer='OATS $3.00\nBonus Points 100 Pts\nRICE $4.00\nSUBTOTAL $7.00';
  assert.deepEqual(parseReceipt(offer).map(row=>row.name),['OATS','RICE']);
+});
+
+test('a printed item beside a merged points offer keeps its own supported count and amount',()=>{
+ const text='MILK $3.99\nX8900T005fers TEST OATS BAR MRJ 500 Pts\n(3)12345678901\n3 @ $2.13 6.39\nYOGURT $5.99\nSUBTOTAL $16.37';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.qty]),[['MILK','3.99',1],['TEST OATS BAR','6.39',3],['YOGURT','5.99',1]]);
+ assert.match(rows[1].raw,/500 Pts/);
+ assert.match(rows[1].raw,/\(3\)12345678901/);
+ const noPrice=parseReceipt('MILK $3.99\nX8900T005fers TEST OATS BAR MRJ 500 Pts\n(3)12345678901\n3 @ $2.13\nYOGURT $5.99');
+ assert.deepEqual(noPrice.map(row=>row.name),['MILK','YOGURT']);
+ assert.deepEqual(parseReceipt('MILK $3.99\nIn-Stare Offers 500 Pts\nRICE $4.00\nSUBTOTAL $7.99').map(row=>row.name),['MILK','RICE']);
 });

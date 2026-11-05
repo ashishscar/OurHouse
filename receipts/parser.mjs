@@ -114,6 +114,17 @@ export function parseReceipt(text){
    const tail=lines.slice(lineIndex,Math.min(lines.length,lineIndex+16));
    if(tail.filter(entry=>/\b\d+\s*(?:pts|points)\b/i.test(entry)).length>=3&&tail.some(entry=>/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(entry.replace(/^[*\s]+/,''))))break;
   }
+  // A tilted OCR box can merge a damaged "Offers" label with the product
+  // beside it. Keep only the visible product suffix when a separate item
+  // code and a following count × price line support a real purchase.
+  const mergedOffer=line.match(/^\S*fers\s+(.+?)\s+H?MRJ\s+\d+\s*Pts\s*$/i);
+  const nextCode=lines[lineIndex+1]||'',nextRate=lines[lineIndex+2]||'';
+  const nextPrice=splitPrice(nextRate),supportedRate=nextPrice?.body.match(ratePattern);
+  if(mergedOffer&&/^\(?\d{1,3}\)?\d{7,14}$/.test(nextCode)&&supportedRate&&Math.abs(num(supportedRate[1])*Number(amount(supportedRate[3]))-Number(nextPrice.amount))<=.03){
+   const label=mergedOffer[1],draft=quantity(label);
+   if(validName(draft.name)){finishRate(undefined,false);pending=label;pendingDraft={...draft,raw:line};last=null;beforeDiscount=null;continue;}
+  }
+  if(pendingDraft&&/^\(?\d{1,3}\)?\d{7,14}$/.test(line)&&splitPrice(lines[lineIndex+1]||'')?.body.match(ratePattern)){pendingDraft.raw+='\n'+line;continue;}
   const nextDepartment=printedDepartment(line);
   if(nextDepartment){finishRate(undefined,false);department=nextDepartment;pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
@@ -124,7 +135,7 @@ export function parseReceipt(text){
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
   // OCR can list a far-right price before the adjacent percentage and name

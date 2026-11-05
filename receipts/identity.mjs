@@ -118,6 +118,17 @@ function reconcileRepeatedLabels(rows){
    row.ocrName=original;row.receiptName=anchor.receiptName||anchor.name;
   }
  }
+ // A repeated unnumbered product can lose its wrapped first line in the
+ // middle purchase. Two matching full labels on either side and the same
+ // printed unit price support restoring only that display label.
+ for(let i=1;i<copied.length-1;i++){
+  const left=copied[i-1],middle=copied[i],right=copied[i+1];
+  if(left.itemNumber||middle.itemNumber||right.itemNumber)continue;
+  const full=labelKey(left.receiptName||left.name),short=labelKey(middle.receiptName||middle.name);
+  if(full!==labelKey(right.receiptName||right.name)||!full.endsWith(' '+short)||short.length<8||full.length-short.length<8)continue;
+  if(left.amount!==middle.amount||right.unitPrice!==middle.amount||left.unit!=='pcs'||middle.unit!=='pcs')continue;
+  middle.ocrName=middle.receiptName||middle.name;middle.receiptName=left.receiptName||left.name;
+ }
  // Some tills print the same unnumbered purchase on separate lines. A unique
  // repeated spelling can repair OCR-only variants at the same price. Keep the
  // original scan in raw and receiptName; never merge the purchases themselves.
