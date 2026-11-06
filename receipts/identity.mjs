@@ -5,6 +5,8 @@ const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',
 // labels. An entry needs the retailer header and printed product words too;
 // numbers alone are not proof of a product identity. No receipt is sent out.
 const verifiedCatalog={costco:{
+ '25771':{terms:['MINI','CUKES'],name:'Mini cucumbers',section:'kitchen',source:'https://www.costco.ca/p/-/mini-cucumbers-907-g/100544094'},
+ '1474938':{terms:['COLGATE','PR'],name:'Pro-Relief toothpaste',section:'household',source:'https://www.costco.ca/p/-/colgate-sensitive-pro-relief-repair-and-prevent-toothpaste-4-x-120-ml/100716429'},
  '1346909':{terms:['KS','ORG','2%'],name:'Organic milk 2%',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-2-milk-4-l/100677467'},
  '435259':{terms:['2%','FINE','FILT'],name:'Fine-filtered milk 2%',section:'kitchen',source:'https://www.costco.ca/p/-/natrel-fine-filtered-2-milk-4-l/100553304'},
  '295619':{terms:['KS','BAGS','60'],name:'Multi-purpose bags',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-quad-tie-clear-multi-purpose-bags-60-pack/100417352'},

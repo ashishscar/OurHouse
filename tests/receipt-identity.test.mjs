@@ -223,6 +223,17 @@ test('Costco household products use verified SKU and printed words while retaini
  assert.equal(identifyReceiptItems(rows,[],'OTHER STORE\n'+missingHeader)[0].name,'EVRST 12X600');
  assert.equal(identifyReceiptItems([{...rows[0],name:'EVRST SOAP'}],[],receiptText)[0].name,'EVRST SOAP');
 });
+
+test('two independently verified Costco SKUs recover products when the logo is unreadable',()=>{
+ const text='VHOLESALE\n25771 MINI CUKES 3.79\n1474938 COLGATE PR 18.99 H\n435259 2% FINE-FILT 6.69\nSUBTOTAL 29.47';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.section]),[
+  ['Mini cucumbers','kitchen'],['Pro-Relief toothpaste','household'],['Fine-filtered milk 2%','kitchen']
+ ]);
+ assert.equal(rows[0].receiptName,'MINI CUKES');
+ assert.equal(rows[1].raw,'1474938 COLGATE PR 18.99 H');
+ assert.equal(identifyReceiptItems(parseReceipt('25771 MINI CUKES 3.79'),[],'OTHER STORE\n25771 MINI CUKES 3.79')[0].name,'MINI CUKES');
+});
 test('repeated item numbers repair one-letter OCR labels without merging purchases or hiding source lines',()=>{
  const lines=['123456 TEST TOVATO $2.11','123456 TEST TOMATO $3.22','123456 TEST TOMATO $4.33','654321 TEST TOVATO $5.44'];
  const rows=identifyReceiptItems(parseReceipt(lines.join('\n')));
