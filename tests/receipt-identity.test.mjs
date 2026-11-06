@@ -99,6 +99,26 @@ test('Pantry and Household use product words rather than substrings, with no for
  for(const name of ['Shopping bag','Paper towels','Laundry detergent','Body wash with coconut oil','Pliers','Glass cleaner','TIDE COLDWTR','DOWNY BEADS','COLGATE TP'])assert.equal(receiptSection(name),'household');
  for(const name of ['GROCERY','TEST BRAND BLUE','TEST BRAND 12X600','Potting mix','TEST CRFLY CRFTD'])assert.equal(receiptSection(name),'');
 });
+
+test('clear food, drink and household words on mixed-store receipts determine the section',()=>{
+ for(const label of ['ROTI CHICKEN','MONSTER VRTY','Mnstr Ultra Paradise','Soft Drink 0range','Sprite Zero','Cocomax Coconut Wtr','0nions Green'])assert.equal(receiptSection(label),'kitchen',label);
+ for(const label of ['Bath Tiss Jmbo 202S','Carry Bag Large Ther','FreshCo 2.0 ReuseBag'])assert.equal(receiptSection(label),'household',label);
+ for(const label of ['LCBO CARD','MONSTER TOY','ACTIVATED','GIFT CARD'])assert.equal(receiptSection(label),'',label);
+ assert.equal(qualifiedReceiptName('Coconut water','Cocomax Coconut Wtr'),'Coconut water');
+ assert.equal(qualifiedReceiptName('Green onions','0nions Green'),'Green onions');
+ const rows=identifyReceiptItems([
+  {name:'Cocomax Coconut Wtr',raw:'Cocomax Coconut Wtr $2.99',amount:'2.99'},
+  {name:'Soft Drink 0range',raw:'Soft Drink 0range $8.99',amount:'8.99'},
+  {name:'Bath Tiss Jmbo 202S',raw:'Bath Tiss Jmbo 202S $17.99',amount:'17.99'},
+  {name:'LCBO CARD',raw:'LCBO CARD $400.00',amount:'400.00'}
+ ]);
+ assert.deepEqual(rows.map(row=>[row.name,row.receiptName,row.section]),[
+  ['Cocomax Coconut Water','Cocomax Coconut Wtr','kitchen'],
+  ['Soft Drink Orange','Soft Drink 0range','kitchen'],
+  ['Bath Tissue Jumbo 202S','Bath Tiss Jmbo 202S','household'],
+  ['LCBO CARD','LCBO CARD','']
+ ]);
+});
 test('printed receipt departments classify unfamiliar labels while clear product types win',()=>{
  const text='21-GROCERY\nZXQ VARIETY 4.99\nTEST SOAP 2.49\n41-HOME\nTEST OPAQUE ITEM 6.89\nTEST MILK 3.99\n27-PRODUC:\nFRESH QT 2.99\nTOTAL 21.35';
  const rows=parseReceipt(text);

@@ -326,6 +326,24 @@ test('a partial basket count never replaces the whole receipt count',()=>{
  assert.match(missing.warnings[0],/3 purchased units/);
 });
 
+test('a standalone gift card activation notice cannot join the next purchase',()=>{
+ const text='SAMPLE STORE\nLCBO CARD $400.00\nACTIVATED\n2773717 MONSTER VRTY $44.99\nSUBTOTAL $444.99';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount})=>[name,amount]),[['LCBO CARD','400.00'],['MONSTER VRTY','44.99']]);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ const product=parseReceipt('ACTIVATED CHARCOAL $3.99\nSUBTOTAL $3.99');
+ assert.equal(product[0].name,'ACTIVATED CHARCOAL');
+});
+
+test('a positive OCR amount on an instant savings line still reduces the basket subtotal',()=>{
+ const text='BATH TISSUE $17.99\nINSTANT SAVINGS $6.00\nYOU SAVED $2.00\nSOFT DRINK $17.98\n-$2.00\nINSTANT SAVINGS\nSPRITE ZERO $53.94\nINSTANT SAVINGS\n-$6.00\nSUBTOTAL $75.91';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(({name,amount})=>[name,amount]),[['BATH TISSUE','17.99'],['SOFT DRINK','17.98'],['SPRITE ZERO','53.94']]);
+ assert.equal(audit.discounts,'14.00');
+ assert.equal(audit.netSum,'75.91');
+ assert.deepEqual(audit.warnings,[]);
+});
+
 test('a loyalty points footer cannot become another purchase when its subtotal is damaged',()=>{
  const text='BREAD $2.75\nBonus Points 1 Pts\nFRUIT 400 Pts\n200 Pts\nSAMPLE BREAD 300 Pts\naVTES 34.56\nSAMPLE COOKIES\nSUBTOTAL\nTOTAL 35.12';
  assert.deepEqual(parseReceipt(text).map(row=>[row.name,row.amount]),[['BREAD','2.75']]);
