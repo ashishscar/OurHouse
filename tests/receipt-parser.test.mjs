@@ -31,6 +31,31 @@ test('Costco item codes, OCR O/0, discounts and product types survive a whole re
  assert.deepEqual(doc.warnings,[]);
 });
 
+test('a priced count line before its label belongs to the following purchase',()=>{
+ const lines=['STCC','VHOLESALE','***START OF PRE-SCANNED ITEMS***','1346909 KS ORG 2% 4L 10.29','2 @ 9.69 19.38','430 XL EGGS','***END OF PRE-SCANNED ITEMS***','TOTAL NUMBER OF PRE-SCANNED ITEMS= 3','SUBTOTAL 29.67'];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-forward-rate', {ai:true});
+ assert.deepEqual(doc.items.map(({name,amount,qty,unit,section})=>({name,amount,qty,unit,section})),[
+  {name:'Organic milk 2%',amount:'10.29',qty:4,unit:'L',section:'kitchen'},
+  {name:'XL EGGS',amount:'19.38',qty:2,unit:'pcs',section:'kitchen'},
+ ]);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.warnings,[]);
+});
+
+test('a grocery savings footer cannot become products or erase pack rates',()=>{
+ const lines=['FRESHCO','Tomatos Diced No Slt $11.94 C','6 @ 1/ $1.99','YOU SAVED $4.20','Milk 2% 1X4L $12.88 C','2 @ 1/ $6.44','YOUR DISCOUNT $1.35','Vinegar $1.69 C','INSTANT SAVINGS -$2.00','CocaCola Zero Can $25.96×HC','2 @ $12.98','YOU PRICE MATCHED & SAVED $6.02','SUBTOTAL $49.12','TOTAL $50.00'];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-grocery-savings', {ai:true});
+ assert.deepEqual(doc.items.map(({amount,qty,unit,section})=>({amount,qty,unit,section})),[
+  {amount:'11.94',qty:6,unit:'pcs',section:'kitchen'},
+  {amount:'12.88',qty:8,unit:'L',section:'kitchen'},
+  {amount:'1.69',qty:1,unit:'pcs',section:'kitchen'},
+  {amount:'25.96',qty:2,unit:'pcs',section:'kitchen'},
+ ]);
+ assert.equal(doc.audit.discounts,'3.35');
+ assert.equal(doc.audit.netSum,'49.12');
+ assert.deepEqual(doc.warnings,[]);
+});
+
 test('hyphenated stock numbers stay separate from names and measurements',()=>{
  const rows=parseReceipt('527-8910-2 TEST STORAGE BOX $7.25\n3 638-1029-4 TEST TOWEL $9.00');
  assert.deepEqual(rows.map(({name,itemNumber,qty,unit,amount})=>({name,itemNumber,qty,unit,amount})),[

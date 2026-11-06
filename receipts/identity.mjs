@@ -1,11 +1,14 @@
 // Suggestions never replace source evidence, quantities or prices. Unknown
 // identities keep the printed label; a section remains editable before import.
-const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
+const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',vegoil:'vegetable oil',tomatos:'tomato',cocacola:'cola',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
 // Public retailer records are an optional, exact-SKU fallback for opaque till
 // labels. An entry needs the retailer header and printed product words too;
 // numbers alone are not proof of a product identity. No receipt is sent out.
 const verifiedCatalog={costco:{
  '1346909':{terms:['KS','ORG','2%'],name:'Organic milk 2%',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-2-milk-4-l/100677467'},
+ '435259':{terms:['2%','FINE','FILT'],name:'Fine-filtered milk 2%',section:'kitchen',source:'https://www.costco.ca/p/-/natrel-fine-filtered-2-milk-4-l/100553304'},
+ '295619':{terms:['KS','BAGS','60'],name:'Multi-purpose bags',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-quad-tie-clear-multi-purpose-bags-60-pack/100417352'},
+ '1944033':{terms:['CHAMP','SHORT'],name:'Shorts',section:'household',source:'https://github.com/Endle/beanbeaver-core/blob/463f2979f2269aa3c980d510f5451b54fcc447d5/crates/receipt-core/tests/receipts_e2e/costco_20260301_redact.expected.json'},
  '2919781':{terms:['ZOA'],name:'Energy drink',section:'kitchen',source:'https://sameday.costco.ca/store/costco-canada/products/109468979-zoa-energy-drink-variety-pack-355-ml'},
  '2908438':{terms:['BIOSTEEL'],name:'Sports drink',section:'kitchen',source:'https://sameday.costco.ca/store/costco-canada/products/109351028-biosteel-hydration-drink-variety-pack-473-ml'},
  '161552':{terms:['QUE','PASA'],name:'Tortilla chips',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-que-pasa-tortilla-chips-908-g/100541978'},
@@ -21,7 +24,7 @@ protectedWords.add('eggplant');
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania burger biscuit cracker boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai'.split(' '))protectedWords.add(word);
 const household=/\b(?:backpacks?|body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
-const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem)\b/i;
+const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|vinegar|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem)\b/i;
 export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)||/\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
 export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
@@ -88,7 +91,10 @@ function costcoEvidence(receiptText){
  // establish the retailer without guessing from an isolated number.
  const matches=new Set();
  for(const line of lines){const match=line.match(/^\s*(\d{5,8})\s+(.+)$/);if(!match)continue;const entry=verifiedCatalog.costco[match[1]];if(!entry)continue;const printed=new Set(labelKey(match[2]).split(' '));if(entry.terms.every(term=>printed.has(term)))matches.add(match[1]);}
- return matches.size>=2;
+ if(matches.size>=2)return true;
+ // Costco's distinctive pre-scanned basket heading and footer support one
+ // exact SKU match when the logo itself is cropped or unreadable.
+ return matches.size>=1&&/START OF PRE-SCANNED ITEMS/i.test(receiptText)&&/TOTAL NUMBER OF PRE-SCANNED ITEMS/i.test(receiptText);
 }
 function catalogMatch(row,isCostco){
  if(!isCostco)return null;
