@@ -1,6 +1,6 @@
 // Suggestions never replace source evidence, quantities or prices. Unknown
 // identities keep the printed label; a section remains editable before import.
-const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',vegoil:'vegetable oil',tomatos:'tomato',cocacola:'cola',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
+const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',bodywash:'body wash',evoo:'extra virgin olive oil',veg:'vegetable',veggie:'vegetable',vegoil:'vegetable oil',tomatos:'tomato',cocacola:'cola',choc:'chocolate',sgrredu:'sugar reduced',slt:'salt',sdls:'seedless',pul:'pulp',org:'organic',blk:'black',chilli:'chili',chillies:'chili',chilis:'chili',cashews:'cashew',tomatoes:'tomato',bananas:'banana',apples:'apple',peppers:'pepper',olives:'olive',flaxseed:'flax seed',chhas:'chaas',chat:'chaat',seffrong:'saffron',corriender:'coriander',kcp:'ketchup',fr:'french',chs:'cheese',rch:'ranch',ssme:'sesame',bn:'bun',swt:'sweet',niblets:'niblets'};
 // Public retailer records are an optional, exact-SKU fallback for opaque till
 // labels. An entry needs the retailer header and printed product words too;
 // numbers alone are not proof of a product identity. No receipt is sent out.
@@ -18,7 +18,7 @@ const verifiedCatalog={costco:{
  '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'}
 }};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
-const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
+const protectedWords=new Set('whole split ground sliced chopped diced skim skimmed homogenized unsalted salted salt seedless pulp no sugar reduced chocolate sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
 protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
@@ -60,6 +60,9 @@ export function qualifiedReceiptName(proposed,receiptName){
  if(supportedName(proposed,receiptName))return proposed.trim();
  if(!receiptSection(proposed)||!candidate.length||candidate.some(w=>!source.includes(w)&&!['and','with','of'].includes(w)))return '';
  const missing=[...new Set(source.filter(w=>(protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(w))&&!actual.has(w)))].sort((a,b)=>Number(/percent$/.test(b))-Number(/percent$/.test(a)));
+ // A negation or nutrition claim changes what the product is. An incomplete
+ // suggestion must not synthesize its word order from disconnected tokens.
+ if(missing.includes('no')&&missing.some(w=>w==='salt'||w==='pulp')||missing.includes('sugar')&&missing.includes('reduced'))return '';
  const display=w=>w.replace(/decimal(\d+)percent$/,'.$1%').replace(/percent$/,'%');
  const typeWord=w=>typeSuffixWords.has(w)||typeSuffixWords.has(w.replace(/s$/,''));
  let positioned=proposed.trim();const inserted=new Set();

@@ -11,6 +11,16 @@ test('short receipt names remain grounded in the print and retain type, flavour 
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
 });
+test('grocery till abbreviations can be expanded without dropping printed product traits',()=>{
+ assert.equal(qualifiedReceiptName('Diced tomatoes no salt','Tomatos Diced No Slt'),'Diced tomatoes no salt');
+ assert.equal(qualifiedReceiptName('1% chocolate milk sugar reduced','Quebon Choc Milk 1% SgrRedu'),'1% chocolate milk sugar reduced');
+ assert.equal(qualifiedReceiptName('Green seedless grapes','Grapes Green Sdls'),'Green seedless grapes');
+ assert.equal(qualifiedReceiptName('Vegetable oil','Unico Vegoil'),'Vegetable oil');
+ assert.equal(qualifiedReceiptName('Diced tomatoes','Tomatos Diced No Slt'),'');
+ assert.equal(qualifiedReceiptName('Chocolate milk','Quebon Choc Milk 1% SgrRedu'),'');
+ assert.equal(qualifiedReceiptName('Seedless grapes','Grapes Green Sdls'),'Green Seedless grapes');
+ assert.equal(qualifiedReceiptName('Orange juice','Org Juice No Pul NFC'),'');
+});
 test('decimal fat percentages cannot become a different percentage during name shortening',()=>{
  assert.equal(supportedName('3.25% Milk','TEST BRAND MILK 3.25%'),true);
  for(const name of ['25% Milk','3% Milk','Milk'])assert.equal(supportedName(name,'TEST BRAND MILK 3.25%'),false);
