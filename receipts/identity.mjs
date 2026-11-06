@@ -5,6 +5,9 @@ const aliases={homo:'homogenized',whol:'whole',wht:'white',sourcrm:'sour cream',
 // labels. An entry needs the retailer header and printed product words too;
 // numbers alone are not proof of a product identity. No receipt is sent out.
 const verifiedCatalog={costco:{
+ '1346909':{terms:['KS','ORG','2%'],name:'Organic milk 2%',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-2-milk-4-l/100677467'},
+ '2919781':{terms:['ZOA'],name:'Energy drink',section:'kitchen',source:'https://sameday.costco.ca/store/costco-canada/products/109468979-zoa-energy-drink-variety-pack-355-ml'},
+ '2908438':{terms:['BIOSTEEL'],name:'Sports drink',section:'kitchen',source:'https://sameday.costco.ca/store/costco-canada/products/109351028-biosteel-hydration-drink-variety-pack-473-ml'},
  '161552':{terms:['QUE','PASA'],name:'Tortilla chips',section:'kitchen',source:'https://www.costco.ca/p/-/kirkland-signature-organic-que-pasa-tortilla-chips-908-g/100541978'},
  '1081570':{terms:['CHEESE','SA'],name:'Nacho cheese sauce',section:'kitchen',source:'https://www.costco.ca/p/-/muy-fresco-nacho-cheese-sauce-3-kg/100498751'},
  '1974989':{terms:['EVRST','12X600'],name:'White towel rolls',section:'household',source:'https://www.costco.ca/p/-/everest-pro-signature-white-towel-roll-197-cm-x-18288-m/4000393138'},
@@ -17,8 +20,8 @@ protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania burger biscuit cracker boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai'.split(' '))protectedWords.add(word);
-const household=/\b(?:body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
-const food=/\b(?:milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem)\b/i;
+const household=/\b(?:backpacks?|body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
+const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem)\b/i;
 export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)||/\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
 export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
@@ -75,12 +78,12 @@ export function qualifiedReceiptName(proposed,receiptName){
  // New identities, amounts and measurements are never supplied here.
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
-function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/[^A-Z0-9%]+/g,' ').trim();}
+function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/(?<=[A-Z])0(?=[A-Z])/g,'O').replace(/[^A-Z0-9%]+/g,' ').trim();}
 function costcoEvidence(receiptText){
  if(/^\s*COSTCO(?:\s+WHOLESALE)?\b/im.test(receiptText))return true;
  const lines=String(receiptText||'').split(/\r?\n/),first=lines.find(line=>line.trim())||'';
  // An identified different merchant rules out this retailer's SKU catalog.
- if(/\b(?:store|supermarket|market|mart|wholesale|no frills|canadian tire|walmart|target)\b/i.test(first))return false;
+ if(/\b(?:store|supermarket|market|mart|no frills|canadian tire|walmart|target)\b/i.test(first))return false;
  // Cropped or faint logos are common. Two independent SKU-plus-label matches
  // establish the retailer without guessing from an isolated number.
  const matches=new Set();

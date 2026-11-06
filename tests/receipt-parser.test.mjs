@@ -1,6 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
+import {documentFrom} from '../receipts/document.mjs';
+
+test('Costco item codes, OCR O/0, discounts and product types survive a whole receipt',()=>{
+ const lines=[
+  'OSTCO WHOLESALE',
+  '430 XL EGGS 9.00',
+  '1346909 KS ORG 2% 4L 10.00',
+  '2919781 Z0A 25.00 H',
+  '2064222 TPD/2919781 4.00- H',
+  '2908438 BIOSTEEL 30.00 H',
+  'SUBTOTAL 70.00',
+  'TOTAL 72.00',
+  'TOTAL NUMBER OF ITEMS SOLD = 4',
+  'TOTAL DISCOUNT(S) $4.00',
+ ];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-costco', {ai:true});
+ assert.deepEqual(doc.items.map(({name,qty,unit,section,itemNumber})=>({name,qty,unit,section,itemNumber})),[
+  {name:'XL EGGS',qty:1,unit:'pcs',section:'kitchen',itemNumber:'430'},
+  {name:'Organic milk 2%',qty:4,unit:'L',section:'kitchen',itemNumber:'1346909'},
+  {name:'Energy drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2919781'},
+  {name:'Sports drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2908438'},
+ ]);
+ assert.deepEqual(doc.items.map(item=>item.amount),['9.00','10.00','25.00','30.00']);
+ assert.equal(doc.items[2].receiptName,'Z0A');
+ assert.equal(doc.audit.packCount,4);
+ assert.equal(doc.audit.netSum,'70.00');
+ assert.equal(doc.audit.total,'72.00');
+ assert.deepEqual(doc.warnings,[]);
+});
 
 test('hyphenated stock numbers stay separate from names and measurements',()=>{
  const rows=parseReceipt('527-8910-2 TEST STORAGE BOX $7.25\n3 638-1029-4 TEST TOWEL $9.00');
