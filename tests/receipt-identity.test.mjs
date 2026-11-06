@@ -59,6 +59,16 @@ test('short names recover only qualifiers printed on the same product and keep o
  assert.equal(qualifiedReceiptName('Cut okra','DIVYA CARROT CUT'),'');
  assert.equal(qualifiedReceiptName('Bhakharwadi','RD MINI BHAKHARWADI'),'Mini Bhakharwadi');
 });
+test('fasting food distinctions survive model suggestions that omit them',()=>{
+ assert.equal(qualifiedReceiptName('Chevdo','SAMPLE FARALI CHEVDO'),'Farali Chevdo');
+ assert.equal(qualifiedReceiptName('Moraiyo','SAMPLE UPAVAS MORAIYO'),'Upavas Moraiyo');
+ assert.equal(qualifiedReceiptName('Potato & peanut chevdo','SAMPLE POTATO & PEANUT BRAND FARALI CHEVDO'),'Potato & peanut Farali chevdo');
+ assert.equal(qualifiedReceiptName('Farali','SAMPLE FARALI CHEVDO'),'');
+ assert.equal(qualifiedReceiptName('Farali chevdo','SAMPLE CHEVDO'),'');
+ const row={name:'SAMPLE FARALI CHEVDO',raw:'SAMPLE FARALI CHEVDO $3.00',amount:'3.00',qty:1,unit:'pcs'};
+ const result=identifyReceiptItems([row],[{source:row.raw,name:'Chevdo',section:'pantry'}])[0];
+ assert.deepEqual([result.name,result.receiptName,result.raw,result.amount],['Farali Chevdo',row.name,row.raw,row.amount]);
+});
 test('unsupported, conflicting or unbound name suggestions keep the receipt label',()=>{
  const rows=[{name:'TEST BRAND BLUE',raw:'TEST BRAND BLUE $2.00',qty:1,unit:'pcs',amount:'2.00'}];
  for(const labels of [[],[{source:'TEST BRAND BLUE $2.00',name:'Paper towels',section:'household'}],[{source:'OTHER LABEL $2.00',name:'Blue',section:'pantry'}],[{source:'TEST BRAND BLUE $2.00',name:'Blue',section:'household'},{source:'TEST BRAND BLUE $2.00',name:'TEST BRAND BLUE',section:'household'}]])assert.equal(identifyReceiptItems(rows,labels)[0].name,'TEST BRAND BLUE');

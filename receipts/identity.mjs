@@ -12,7 +12,7 @@ const verifiedCatalog={costco:{
  '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'}
 }};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
-const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno'.split(' '));
+const protectedWords=new Set('whole split ground sliced chopped skim skimmed homogenized unsalted salted sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
 protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
@@ -39,7 +39,7 @@ export function supportedName(proposed,receiptName){
  for(const word of source)if((protectedWords.has(word)||protectedWords.has(word.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(word))&&!actual.has(word))return false;
  return true;
 }
-const qualifiersOnly=new Set('blue black red green brown white yellow pink grey gray gold silver original organic frozen raw whole split ground sliced chopped skim skimmed unsalted salted sweet spicy plain fine nylon'.split(' '));
+const qualifiersOnly=new Set('blue black red green brown white yellow pink grey gray gold silver original organic frozen raw whole split ground sliced chopped skim skimmed unsalted salted sweet spicy plain fine nylon farali upavas'.split(' '));
 // Product types follow their flavour/ingredient in a completed display name
 // (for example, mango chutney). Qualifiers such as organic stay in front.
 const typeSuffixWords=new Set('rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel bag lighter plier tool foil bleach sanitizer sponge broom mop'.split(' '));
@@ -56,9 +56,21 @@ export function qualifiedReceiptName(proposed,receiptName){
  const missing=[...new Set(source.filter(w=>(protectedWords.has(w)||protectedWords.has(w.replace(/s$/,''))||/^\d+(?:decimal\d+)?percent$/.test(w))&&!actual.has(w)))].sort((a,b)=>Number(/percent$/.test(b))-Number(/percent$/.test(a)));
  const display=w=>w.replace(/decimal(\d+)percent$/,'.$1%').replace(/percent$/,'%');
  const typeWord=w=>typeSuffixWords.has(w)||typeSuffixWords.has(w.replace(/s$/,''));
- const prefix=missing.filter(w=>!typeWord(w)).map(display).join(' ').replace(/\p{L}/u,c=>c.toUpperCase());
+ let positioned=proposed.trim();const inserted=new Set();
+ // Keep fasting qualifiers beside the product word they modify when that
+ // relative position is visible in the print. Prefixing every qualifier can
+ // turn "Potato & peanut farali chevdo" into an awkward reordered name.
+ for(const word of missing.filter(w=>w==='farali'||w==='upavas')){
+  const next=source.slice(source.indexOf(word)+1).find(w=>candidate.includes(w));
+  if(!next)continue;
+  const token=new RegExp(`\\b${next}\\b`,'i');
+  if(!token.test(positioned))continue;
+  positioned=positioned.replace(token,match=>`${word[0].toUpperCase()+word.slice(1)} ${match}`);
+  inserted.add(word);
+ }
+ const prefix=missing.filter(w=>!typeWord(w)&&!inserted.has(w)).map(display).join(' ').replace(/\p{L}/u,c=>c.toUpperCase());
  const suffix=missing.filter(typeWord).map(display).join(' ');
- const completed=[prefix,proposed.trim(),suffix].filter(Boolean).join(' ');
+ const completed=[prefix,positioned,suffix].filter(Boolean).join(' ');
  // Complete a grounded suggestion only from qualifiers already in the print.
  // New identities, amounts and measurements are never supplied here.
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
