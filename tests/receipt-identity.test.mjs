@@ -332,3 +332,16 @@ test('a manufacturer-verified plant seasoning is pantry food but unrelated meat 
  assert.equal(rows[1].section,'');
  assert.equal(rows[1].excludedFromPantry,true);
 });
+
+test('short till prefixes are removed only when remaining printed words identify a product',()=>{
+ const text='SAMPLE MARKET\nAB WASABI IN TUBE FAMILY SIZE $6.59\nXY LIGHT PRSVD MUSTARD STEM $6.97\nQW TRUFFLE INSTANT NOODLE $4.49\nYZ ON SWEETENED SOYA DRINK $5.98\nMF CHEESE SA $13.99\nTEST TOMATO $2.11\nSUBTOTAL $40.13';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>row.name),[
+  'WASABI','LIGHT Preserved MUSTARD STEM','TRUFFLE INSTANT NOODLE','SWEETENED SOYA DRINK','MF CHEESE SA','TEST TOMATO'
+ ]);
+ assert.deepEqual(rows.map(row=>row.receiptName),[
+  'AB WASABI IN TUBE FAMILY SIZE','XY LIGHT PRSVD MUSTARD STEM','QW TRUFFLE INSTANT NOODLE','YZ ON SWEETENED SOYA DRINK','MF CHEESE SA','TEST TOMATO'
+ ]);
+ assert.equal(rows[0].raw,'AB WASABI IN TUBE FAMILY SIZE $6.59');
+ assert.deepEqual(rows.map(row=>row.amount),['6.59','6.97','4.49','5.98','13.99','2.11']);
+});

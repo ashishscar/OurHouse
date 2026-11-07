@@ -135,11 +135,26 @@ function merchantProduct(receiptName,receiptText){
 // Expand only unambiguous till abbreviations and OCR O/0 substitutions in
 // display text. The literal receiptName and raw line remain available for
 // review; unfamiliar tokens are never completed from a product guess.
-const displayTokens={wtr:'Water',tiss:'Tissue',jmbo:'Jumbo',mnstr:'Monster',lys0l:'Lysol','0nions':'Onions','0range':'Orange'};
+const displayTokens={wtr:'Water',tiss:'Tissue',jmbo:'Jumbo',mnstr:'Monster',lys0l:'Lysol',prsvd:'Preserved','0nions':'Onions','0range':'Orange'};
+const brandTrimWords=new Set([...protectedWords,...'wasabi in tube family size light prsvd preserved mustard stem truffle instant noodle sweetened soya drink'.split(' ')]);
 function normalizedReceiptName(receiptName){
  if(!receiptSection(receiptName))return receiptName;
  if(/^TOM\s+(?:DICED|CRUSHED|WHOLE)$/i.test(receiptName))return receiptName.replace(/^TOM\s+(DICED|CRUSHED|WHOLE)$/i,(_,form)=>`${form[0]}${form.slice(1).toLowerCase()} tomatoes`);
- return receiptName.replace(/\b(?:wtr|tiss|jmbo|mnstr|lys0l|0nions|0range)\b/gi,token=>displayTokens[token.toLowerCase()]||token);
+ // A short, opaque till prefix may be a brand. Drop it only when the
+ // remaining printed words independently identify a product.
+ const tokens=receiptName.trim().split(/\s+/),first=tokens[0]||'';
+ const shortPrefix=/^(?:[A-Z]{2,4}|[A-Z]&[A-Z])$/.test(first)&&!receiptSection(first)&&!protectedWords.has(first.toLowerCase());
+ const second=tokens[1]||'',twoWordPrefix=shortPrefix&&/^[A-Z]{1,2}$/.test(second)&&!receiptSection(second)&&!protectedWords.has(second.toLowerCase());
+ let name=receiptName;
+ if(shortPrefix){
+  const candidate=tokens.slice(twoWordPrefix?2:1).join(' ');
+  const groundedWords=candidate.toLowerCase().split(/\s+/);
+  if(groundedWords.length>=2&&groundedWords.every(word=>brandTrimWords.has(word)||/^\d+(?:[.,]\d+)?(?:%|g|kg|l|ml|lb|pk)$/.test(word))&&receiptSection(candidate)&&supportedName(candidate,receiptName))name=candidate;
+ }
+ // Packaging stays in receiptName and raw for exact review and copying.
+ const withoutPackage=name.replace(/\s+IN\s+(?:A\s+)?TUBE(?:\s+FAMILY\s+SIZE)?$/i,'').replace(/\s+FAMILY\s+SIZE$/i,'');
+ if(withoutPackage!==name&&receiptSection(withoutPackage)&&supportedName(withoutPackage,receiptName))name=withoutPackage;
+ return name.replace(/\b(?:wtr|tiss|jmbo|mnstr|lys0l|prsvd|0nions|0range)\b/gi,token=>displayTokens[token.toLowerCase()]||token);
 }
 function withinTwoEdits(a,b){
  if(Math.abs(a.length-b.length)>2)return false;
