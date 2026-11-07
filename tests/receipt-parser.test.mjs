@@ -377,3 +377,15 @@ test('a printed item beside a merged points offer keeps its own supported count 
  assert.deepEqual(noPrice.map(row=>row.name),['MILK','YOGURT']);
  assert.deepEqual(parseReceipt('MILK $3.99\nIn-Stare Offers 500 Pts\nRICE $4.00\nSUBTOTAL $7.99').map(row=>row.name),['MILK','RICE']);
 });
+
+test('a department joined to a purchase keeps the product, while a two-line bottle deposit remains a charge',()=>{
+ const text='21-GROCERY SAMPLE ORANGE SODA HMRJ 8.29\n22-DAIRY\n12345678901 SAMPLE MILK RQ\n5.00\n26-LIQUOR\n(2)12345678902 SAMPLE BEER HQ\n2 @ $2.79 5.58\nDEPOSIT 1\n2@$0.10 0.20\n27-PRODUCE\n(2)12345678903 SAMPLE POTATO 10LB MRJ\n2 @ $1.99 3.98\n-0.98\n31-MEATS\n12345678904 SAMPLE CHICKEN DRUMSTICKS 4.47\n41-HOME\n(3)24633 DIG STAMP EARN Q\n3 @ $0.00 0.00\nSUBTOTAL 26.54';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.department]),[
+  ['SAMPLE ORANGE SODA','8.29','kitchen'],['SAMPLE MILK','5.00','kitchen'],['SAMPLE BEER','5.58','exclude'],
+  ['SAMPLE POTATO','3.98','kitchen'],['SAMPLE CHICKEN DRUMSTICKS','4.47','exclude']
+ ]);
+ assert.equal(rows[0].raw,'21-GROCERY SAMPLE ORANGE SODA HMRJ 8.29');
+ assert.equal(rows[3].qty,9.071847);assert.equal(rows[3].unit,'kg');assert.equal(rows[3].packCount,2);
+ assert.equal(audit.charges,'0.20');assert.equal(audit.discounts,'0.98');assert.equal(audit.netSum,'26.54');assert.deepEqual(audit.warnings,[]);
+});

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
-import {parseReceipt} from '../receipts/parser.mjs';
+import {parseReceipt,auditReceipt} from '../receipts/parser.mjs';
 test('verified food types are pantry even when a receipt omits the word snack',()=>{
  for(const label of ['DP SPICY VEGGIE BURGERS','DP ORIGINAL KHARI','MUZDA MAKHANIA','BALAJI CRUNCHEM','BR 5050 SWEET&SALTY FAMILY','COKE DIET'])assert.equal(receiptSection(label),'kitchen',label);
  for(const label of ['BR 5050 FAMILY','UNKNOWN SWEET&SALTY FAMILY','COLDWTR CLEANER'])assert.notEqual(receiptSection(label),'kitchen',label);
@@ -271,4 +271,14 @@ test('two full repeated labels support one middle wrapped-line dropout at the sa
  assert.equal(rows[1].ocrName,'SPICY CRACKER');
  const different=identifyReceiptItems(parseReceipt(text.replace('SPICY CRACKER $2.25','SPICY CRACKER $2.35')),[],text);
  assert.equal(different[1].receiptName,'SPICY CRACKER');
+});
+
+test('meat and alcohol purchases stay visible for bill review without being assigned to vegetarian pantry',()=>{
+ const text='21-GROCERY SAMPLE SODA 1.00\n26-LIQUOR SAMPLE BEER 2.00\n31-MEATS SAMPLE DRUMSTICKS 3.00\nSUBTOTAL 6.00';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.section]),[
+  ['SAMPLE SODA','1.00','kitchen'],['SAMPLE BEER','2.00',''],['SAMPLE DRUMSTICKS','3.00','']
+ ]);
+ assert.equal(rows[1].excludedFromPantry,true);assert.equal(rows[2].excludedFromPantry,true);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
 });
