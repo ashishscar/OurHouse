@@ -11,6 +11,7 @@ test('complete count headings tolerate one OCR character error without changing 
  }
  assert.equal(printedReceiptCount('Item count: 23').value,'23');
  assert.equal(printedReceiptCount('Items sold 19').value,'19');
+ assert.equal(printedReceiptCount('# ITEMS SOLD 5').value,'5');
  assert.equal(printedReceiptCount('Number of products: 0').value,'0');
  const audit=auditReceipt('TEST OATS $2.00\nTOTAL $2.00\nNumher of items: 17');
  assert.equal(audit.productCount,17);assert.equal(audit.productCountEvidence.printed,'Numher of items: 17');

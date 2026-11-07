@@ -15,6 +15,6 @@ export function printedReceiptCount(line){
  if(typeof line!=='string'||line.length>160)return null;
  let m=line.trim().match(/^([a-z]{5,7})\s+of\s+(products|items)\s*[:=]?\s*(\d{1,4})\s*$/i);
  if(m&&oneEdit(m[1].toLowerCase(),'number'))return{label:'Number of '+m[2].toLowerCase(),value:m[3],printed:line,headingCorrected:m[1].toLowerCase()!=='number'};
- m=line.trim().match(/^(items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\s*$/i);
+ m=line.trim().match(/^#?\s*(items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\s*$/i);
  return m?{label:m[1],value:m[2],printed:line,headingCorrected:false}:null;
 }

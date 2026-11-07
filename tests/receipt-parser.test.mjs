@@ -389,3 +389,13 @@ test('a department joined to a purchase keeps the product, while a two-line bott
  assert.equal(rows[3].qty,9.071847);assert.equal(rows[3].unit,'kg');assert.equal(rows[3].packCount,2);
  assert.equal(audit.charges,'0.20');assert.equal(audit.discounts,'0.98');assert.equal(audit.netSum,'26.54');assert.deepEqual(audit.warnings,[]);
 });
+
+test('a survey prize before a basket never becomes stock or attaches to the first barcode-labelled item',()=>{
+ const text='Walmart\nHow did we do today?\nComplete our short customer survey at\nSURVEY.EXAMPLE.CA\n1 of 3 $1000\ngift cards\nRules and regulations apply.\nSee contest rules for details.\nSAMPLE SODA 056000010660 $8.28 J\nSAMPLE CLEANER 059631882930 $3.97 J\nSAMPLE CLEANER 059631882930 $3.97 J\nSUBTOTAL $16.22\n# ITEMS SOLD 3';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(({name,amount,itemNumber})=>[name,amount,itemNumber]),[
+  ['SAMPLE SODA','8.28','056000010660'],['SAMPLE CLEANER','3.97','059631882930'],['SAMPLE CLEANER','3.97','059631882930']
+ ]);
+ assert.equal(rows[0].raw,'SAMPLE SODA 056000010660 $8.28 J');
+ assert.equal(audit.productCount,3);assert.equal(audit.netSum,'16.22');assert.deepEqual(audit.warnings,[]);
+});

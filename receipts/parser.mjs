@@ -54,11 +54,15 @@ function repairMeasurementZeros(name){
 }
 function quantity(body){
  let name=repairMeasurementZeros(body).replace(/^(?:H?MRJ|RQ|HQ)\s+(?=(?:\(?\d{5,14}\)?\s+)?[A-Z])/i,'').replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ|RQ|HQ)\s*$/i,''),count=1,known=false;
+ // Walmart-style tills put a 12-digit barcode after the printed label.
+ // Preserve it as identity evidence, never as part of the display name.
+ const trailingCode=name.match(/\s+(\d{11,14})$/)?.[1];
+ if(trailingCode)name=name.slice(0,-trailingCode.length).trim();
  const inline=name.match(new RegExp(ratePattern.source.replace('^\\s*','(?:^|\\s)'),'i'));if(inline)name=name.slice(0,inline.index).trim();
  const counted=name.match(/^(\d{1,3})\s+(\d{3}-\d{4}-\d|\d{4,14})\s+/),lead=name.match(/^\s*(\d{1,3})\s*[x×](?![A-Z])\s*/i);
  if(counted){count=Number(counted[1]);name=name.slice(counted[1].length).trim();known=true;}
  if(lead){count=Number(lead[1]);name=name.slice(lead[0].length);known=true;}
- const itemNumber=name.match(/^(\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1],multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i'));
+ const itemNumber=name.match(/^(\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1]||trailingCode,multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i'));
  const candidateWeight=multi?null:name.match(measurement);
  // POS item codes can precede a store prefix such as "PC". The code is an
  // identifier, not a count of pieces, even though "pc" is also a unit.
@@ -151,7 +155,7 @@ export function parseReceipt(text){
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
   // OCR can list a far-right price before the adjacent percentage and name

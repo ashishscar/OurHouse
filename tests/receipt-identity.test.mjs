@@ -282,3 +282,16 @@ test('meat and alcohol purchases stay visible for bill review without being assi
  assert.equal(rows[1].excludedFromPantry,true);assert.equal(rows[2].excludedFromPantry,true);
  assert.deepEqual(auditReceipt(text,rows).warnings,[]);
 });
+
+test('a Walmart barcode plus visible words can identify drink and cleaner while preserving the OCR evidence',()=>{
+ const text='Walmart\nCRLSH ZERO 0 056000010660 $8.28 J\nLYS0L BATH P 059631882930 $3.97 J\nLYSOL BATH P 059631882930 $3.97 J\nSUBTOTAL $16.22';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.section,row.nameSource]),[
+  ['Crush Zero Orange','kitchen','verified-catalog'],['Bathroom cleaner','household','verified-catalog'],['Bathroom cleaner','household','verified-catalog']
+ ]);
+ assert.deepEqual(rows.map(row=>row.receiptName),['CRLSH ZERO 0','LYS0L BATH P','LYSOL BATH P']);
+ assert.equal(rows[0].raw,'CRLSH ZERO 0 056000010660 $8.28 J');
+ assert.equal(identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(1).join('\n'))[0].name,'CRLSH ZERO 0');
+ assert.equal(identifyReceiptItems([{...rows[0],name:'OTHER ZERO 0',receiptName:'OTHER ZERO 0'}],[],text)[0].name,'OTHER ZERO 0');
+ assert.equal(identifyReceiptItems([{...rows[0],itemNumber:'000000000000'}],[],text)[0].name,'CRLSH ZERO 0');
+});
