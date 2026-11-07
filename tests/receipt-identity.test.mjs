@@ -320,3 +320,15 @@ test('a Walmart barcode plus visible words can identify drink and cleaner while 
  assert.equal(identifyReceiptItems([{...rows[0],name:'OTHER ZERO 0',receiptName:'OTHER ZERO 0'}],[],text)[0].name,'OTHER ZERO 0');
  assert.equal(identifyReceiptItems([{...rows[0],itemNumber:'000000000000'}],[],text)[0].name,'CRLSH ZERO 0');
 });
+
+test('a manufacturer-verified plant seasoning is pantry food but unrelated meat stays excluded',()=>{
+ const text='TOMAX STEAM MEAT 5 SPICES PDR W $2.99\nSAMPLE MEAT SPICES PDR W $3.99\nSUBTOTAL $6.98';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.equal(rows[0].name,'Five-spice powder');
+ assert.equal(rows[0].receiptName,'TOMAX STEAM MEAT 5 SPICES PDR');
+ assert.equal(rows[0].section,'kitchen');
+ assert.equal(rows[0].nameSource,'verified-catalog');
+ assert.equal(rows[0].raw,'TOMAX STEAM MEAT 5 SPICES PDR W $2.99');
+ assert.equal(rows[1].section,'');
+ assert.equal(rows[1].excludedFromPantry,true);
+});

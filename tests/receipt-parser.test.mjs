@@ -19,6 +19,28 @@ test('a receipt deposit is a bill charge, not stock or an extra purchased item',
  assert.equal(doc.ocr.text,lines.join('\n'));
 });
 
+test('a priced bottle deposit is a charge and a zero-dollar department heading is not stock',()=>{
+ const text='SAMPLE MARKET\nGROCERY $0.00\nSAMPLE SODA $13.99\nDEPOSIT 1 $0.60\nSUBTOTAL $14.59\nTAX $1.82\nTOTAL $16.41';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.department]),[['SAMPLE SODA','13.99','kitchen']]);
+ assert.equal(audit.charges,'0.60');assert.equal(audit.netSum,'14.59');assert.deepEqual(audit.warnings,[]);
+});
+
+test('bilingual receipt annotations and multi-buy lines keep every separate purchase',()=>{
+ const text=['SAMPLE MARKET','GROCERY $0.00','SAMPLE WASABI $6.59','示例山葵 90G','SAMPLE SPICE $2.99','示例香料','(SALE) SAMPLE MUSTARD STEM','191509 3 @3/$6.97 W $6.97','示例芥菜','(SALE) SAMPLE NOODLES $4.49','示例麵','DELI','SAMPLE SOY DRINK','2 @ $2.99ea. W $5.98','示例豆漿','TOTAL $27.02'].join('\n');
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.qty,row.unit]),[
+  ['SAMPLE WASABI','6.59',1,'pcs'],['SAMPLE SPICE','2.99',1,'pcs'],['SAMPLE MUSTARD STEM','6.97',3,'pcs'],['SAMPLE NOODLES','4.49',1,'pcs'],['SAMPLE SOY DRINK','5.98',2,'pcs']
+ ]);
+ assert.equal(rows[2].itemNumber,'191509');assert.equal(rows[2].quantityKnown,true);
+ assert.match(rows[0].raw,/示例山葵/);assert.match(rows[2].raw,/示例芥菜/);
+ assert.equal(audit.netSum,'27.02');assert.deepEqual(audit.warnings,[]);
+ // A Chinese-only product followed by a separate price must not be swallowed
+ // as a translation of the preceding purchase.
+ const separate=parseReceipt('SAMPLE RICE $2.00\n示例豆腐\n$3.00\nTOTAL $5.00');
+ assert.equal(separate.length,2);assert.equal(separate[1].amount,'3.00');
+});
+
 test('Costco item codes, OCR O/0, discounts and product types survive a whole receipt',()=>{
  const lines=[
   'OSTCO WHOLESALE',
@@ -398,4 +420,16 @@ test('a survey prize before a basket never becomes stock or attaches to the firs
  ]);
  assert.equal(rows[0].raw,'SAMPLE SODA 056000010660 $8.28 J');
  assert.equal(audit.productCount,3);assert.equal(audit.netSum,'16.22');assert.deepEqual(audit.warnings,[]);
+});
+
+test('a printed six-pack is one package and a trailing W tax code is not part of the name',()=>{
+ const rows=parseReceipt('TEST SODA 6 PK W $13.99\n2 @ $13.99 W $27.98\nSUBTOTAL $27.98');
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].name,'TEST SODA');
+ assert.equal(rows[0].qty,2);
+ assert.equal(rows[0].unit,'packet');
+ assert.equal(rows[0].packSize,6);
+ assert.equal(rows[0].packUnit,'pcs');
+ assert.equal(rows[0].packCount,2);
+ assert.equal(rows[0].amount,'27.98');
 });

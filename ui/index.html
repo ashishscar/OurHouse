@@ -1762,7 +1762,7 @@ Instructions
   <div class="receipt-text-head"><h2>Receipt photo</h2><button type="button" class="btn grey sm" onclick="document.getElementById('receiptTextView').close()">Done</button></div>
   <div class="receipt-text-content">
     <div class="receipt-text-photo"><img id="receiptTextPhoto" alt="Receipt photo at readable size"></div>
-    <div class="receipt-text-copy"><h3>Text read from photo</h3><p class="finehint">Press and hold a word or number to select and copy it. Compare with the photo before correcting a scanned item.</p><button type="button" class="btn grey sm" onclick="copyReceiptScanText()">Copy all text</button><pre id="receiptTextTranscript" aria-label="Recognized receipt text"></pre></div>
+    <div class="receipt-text-copy"><h3>Text read from photo</h3><p class="finehint">Press and hold any word or number, adjust the selection, then copy exactly what the scan read. Compare it with the photo before correcting an item.</p><div class="receipt-copy-actions"><button type="button" class="btn grey sm" onclick="copySelectedReceiptText()">Copy selection</button><button type="button" class="btn grey sm" onclick="copyReceiptScanText()">Copy all text</button></div><pre id="receiptTextTranscript" aria-label="Recognized receipt text"></pre></div>
   </div>
 </dialog>
 

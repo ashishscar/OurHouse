@@ -121,3 +121,25 @@ test('receipt identity keeps successful AI sections, reads only a failed section
  const draft={...source[0],name:'Rice',section:'',receiptLineId:'a'.repeat(64)};assert.throws(()=>w.addItemsToPantry([draft]),/Choose Pantry or Household/);assert.deepEqual(h.errors,[]);
  }finally{h.close();}
 });
+
+test('receipt viewer copies only the selected OCR characters',async()=>{
+ const h=harness({signedIn:true,household:true});
+ try{
+  await settle();
+  const w=h.w,line='MILK 2L $5.99',transcript=w.document.getElementById('receiptTextTranscript');
+  let copied='';
+  Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async value=>{copied=value}},configurable:true});
+  w.eval("familyReceiptContext={actor:myUid,house:siteId,photoUrl:'blob:synthetic-receipt',document:{ocr:{text:'MILK 2L $5.99'}}}");
+  w.openReceiptTextView();
+  assert.equal(transcript.textContent,line);
+  const range=w.document.createRange(),start=line.indexOf('5.99');
+  range.setStart(transcript.firstChild,start);
+  range.setEnd(transcript.firstChild,start+4);
+  w.getSelection().removeAllRanges();
+  w.getSelection().addRange(range);
+  w.copySelectedReceiptText();
+  await Promise.resolve();
+  assert.equal(copied,'5.99');
+  assert.deepEqual(h.errors,[]);
+ }finally{h.close();}
+});
