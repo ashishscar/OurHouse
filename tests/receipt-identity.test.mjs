@@ -234,6 +234,16 @@ test('two independently verified Costco SKUs recover products when the logo is u
  assert.equal(rows[1].raw,'1474938 COLGATE PR 18.99 H');
  assert.equal(identifyReceiptItems(parseReceipt('25771 MINI CUKES 3.79'),[],'OTHER STORE\n25771 MINI CUKES 3.79')[0].name,'MINI CUKES');
 });
+test('verified food and household SKUs keep each price and printed label across a mixed basket',()=>{
+ const text='OSTCO\nWHOLESALE\n232952 COKE ZERO 17.99 H\n1041477 PINEAP JUICE 11.99 H\n1792990 KS PAD - JLA 21.49\n810 LCBO CARD 400.00\nSUBTOTAL 451.47';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.section]),[
+  ['Coke Zero','17.99','kitchen'],['Pineapple juice','11.99','kitchen'],['Absorbent pads','21.49','household'],['LCBO CARD','400.00','']
+ ]);
+ assert.deepEqual(rows.map(row=>row.receiptName),['COKE ZERO','PINEAP JUICE','KS PAD - JLA','LCBO CARD']);
+ assert.equal(rows[2].raw,'1792990 KS PAD - JLA 21.49');
+ assert.equal(identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(2).join('\n'))[2].name,'KS PAD - JLA');
+});
 test('repeated item numbers repair one-letter OCR labels without merging purchases or hiding source lines',()=>{
  const lines=['123456 TEST TOVATO $2.11','123456 TEST TOMATO $3.22','123456 TEST TOMATO $4.33','654321 TEST TOVATO $5.44'];
  const rows=identifyReceiptItems(parseReceipt(lines.join('\n')));

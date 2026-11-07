@@ -17,7 +17,10 @@ const verifiedCatalog={costco:{
  '1081570':{terms:['CHEESE','SA'],name:'Nacho cheese sauce',section:'kitchen',source:'https://www.costco.ca/p/-/muy-fresco-nacho-cheese-sauce-3-kg/100498751'},
  '1974989':{terms:['EVRST','12X600'],name:'White towel rolls',section:'household',source:'https://www.costco.ca/p/-/everest-pro-signature-white-towel-roll-197-cm-x-18288-m/4000393138'},
  '2633624':{terms:['CHARMIN','ULTR'],name:'Toilet paper',section:'household',source:'https://www.costco.ca/p/-/charmin-ultra-soft-toilet-paper-jumbo-rolls-30-200-sheets/4000399694'},
- '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'}
+ '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'},
+ '232952':{terms:['COKE','ZERO'],name:'Coke Zero',section:'kitchen',source:'https://www.costco.ca/p/-/coca-cola-zero-355-ml-32-pack/100548619'},
+ '1041477':{terms:['PINEAP','JUICE'],name:'Pineapple juice',section:'kitchen',source:'https://www.costco.ca/p/-/freshn-pure-pineapple-burst-juice-blend-6-1-l/100461737'},
+ '1792990':{terms:['KS','PAD','JLA'],name:'Absorbent pads',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-absorbent-multipurpose-pads-100-count/4000281816'}
 }};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped diced skim skimmed homogenized unsalted salted salt seedless pulp no sugar reduced chocolate sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
