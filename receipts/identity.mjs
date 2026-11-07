@@ -27,8 +27,10 @@ const verifiedCatalog={walmart:{
  '305882':{terms:['KS','IBU','400M'],name:'Ibuprofen',section:'household',source:'https://cocoeast.ca/costco-east-pharmacy-vitamin-super-post-oct-25th-2023-ontario-atlantic-canada/305882kirkland-signature-ibuprofen-400mg-es-300-tablets15-99-4/'},
  '399':{terms:['DOORDASH2X50'],name:'DoorDash gift cards',section:'',source:'https://www.costco.ca/p/-/doordash-2-x-50-e-gift-cards/4000311449'},
  '401150':{terms:['NANO'],name:'Drinkable yogurt',section:'kitchen',source:'https://www.costco.ca/p/-/igo-assorted-15-nano-drinkable-yogurt-24-x-93-ml/100552352?langId=-24'}
+},lcbo:{
+ '00001123':{terms:['BABY','DUCK'],name:'Baby Duck',section:'exclude',source:'https://www.lcbo.com/en/andr-rs-baby-duck-91'}
 }};
-const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
+const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(?<=\p{L})['’](?=s\b)/gu,'').replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped diced skim skimmed homogenized unsalted salted salt seedless pulp no sugar reduced chocolate sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
 protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
@@ -231,7 +233,7 @@ function repeatedNames(items){
  return items;
 }
 export function identifyReceiptItems(rows,annotations=[],receiptText=''){
- const retailer=costcoEvidence(receiptText)?'costco':/^\s*Walmart\b/i.test(String(receiptText).split(/\r?\n/).find(line=>line.trim())||'')?'walmart':'';
+ const retailer=costcoEvidence(receiptText)?'costco':/^\s*Walmart\b/i.test(String(receiptText).split(/\r?\n/).find(line=>line.trim())||'')?'walmart':/^\s*LCB[O0]\b/i.test(String(receiptText).split(/\r?\n/).find(line=>line.trim())||'')?'lcbo':'';
  return repeatedNames(reconcileRepeatedLabels(rows).map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
@@ -246,7 +248,7 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
-  const excluded=row.department==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
+  const excluded=row.department==='exclude'||verified?.section==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
   const section=excluded?'':clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
   return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));

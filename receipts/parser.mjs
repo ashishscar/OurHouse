@@ -139,6 +139,18 @@ export function parseReceipt(text){
   }
   const nextDepartment=printedDepartment(line);
   if(nextDepartment){finishRate(undefined,false);department=nextDepartment;pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  // Some bottle tills print the product, SKU/size/deposit, then a count and
+  // price including the refundable deposit. Require exact printed arithmetic
+  // before joining these three lines; the deposit is already in the item total.
+  const bottle=line.match(/^(\d{4,14})\s+0?(\d{3,5})\s*ML\s+DEP\s*\.?\s*(\d{1,2})\s*ea\.?$/i);
+  const bottleTotal=(lines[lineIndex+1]||'').match(/^\((\d{1,3})\s*@\s*\$?(\d+[.,]\d{2})\)\s+\$?(\d+[.,]\d{2})$/);
+  if(pending&&bottle&&bottleTotal){
+   const count=Number(bottleTotal[1]),unitPrice=num(bottleTotal[2]),deposit=Number('0.'+bottle[3].padStart(2,'0')),printed=num(bottleTotal[3]);
+   if(count>0&&Math.abs(count*(unitPrice+deposit)-printed)<.005){
+    const row={...quantity(pending),amount:amount(bottleTotal[3]),raw:pending+'\n'+line+'\n'+lines[lineIndex+1],itemNumber:bottle[1],qty:count*Number(bottle[2]),unit:'ml',packSize:Number(bottle[2]),packUnit:'ml',packCount:count,quantityKnown:true,quantityDetail:count+' bottles × '+bottle[2]+' ml',unitPrice:amount(bottleTotal[2]),rateQuantity:count,includedDeposit:rounded(count*deposit)};
+    if(validName(row.name)){add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;consumed.add(lineIndex+1);continue;}
+   }
+  }
   // Bilingual tills often repeat the preceding product in a second script.
   // Only bind an adjacent unpriced translation when the previous raw line is
   // the just-finished purchase and the next line begins another Latin label.
@@ -161,7 +173,7 @@ export function parseReceipt(text){
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
   // Some tills print a multi-buy as "3 @3/$6.97". The 6.97 is the
@@ -243,7 +255,7 @@ export function parseReceipt(text){
   if(rows.length>=500)break;
  }
  finishRate();
- return rows.map(row=>({...row,...(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice))>.03?{warning:'The quantity × unit price does not match this product amount. Check the photo before selecting it.'}:{})}));
+ return rows.map(row=>({...row,...(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice)-Number(row.includedDeposit||0))>.03?{warning:'The quantity × unit price does not match this product amount. Check the photo before selecting it.'}:{})}));
 }
 export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(row=>({...row,pick:false,confidence:'review'}));}
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}

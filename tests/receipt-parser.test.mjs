@@ -26,6 +26,30 @@ test('a priced bottle deposit is a charge and a zero-dollar department heading i
  assert.equal(audit.charges,'0.60');assert.equal(audit.netSum,'14.59');assert.deepEqual(audit.warnings,[]);
 });
 
+test('bottle price with included deposits keeps its product, units and expense without pantry stock',()=>{
+ const lines=['SAMPLE LIQUOR STORE','SAMPLE WINE','90001234 01250ML DEP .10 ea.','(4 @ 5.00) 20.40','Total 20.40','Deposit (DEP) 0.40','Gift Card 10.00','Visa 10.40'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-bottle.jpg'},{ai:true});
+ assert.equal(doc.items.length,1);
+ assert.deepEqual(doc.items.map(({name,amount,qty,unit,packCount,includedDeposit,section})=>({name,amount,qty,unit,packCount,includedDeposit,section})),[
+  {name:'SAMPLE WINE',amount:'20.40',qty:5000,unit:'ml',packCount:4,includedDeposit:0.4,section:''}
+ ]);
+ assert.equal(doc.items[0].excludedFromPantry,true);
+ assert.equal(doc.audit.netSum,'20.40');
+ assert.deepEqual(doc.warnings,[]);
+ const verified=documentFrom([{lines:['LCB0','BABY DUCK','00001123 00750ML DEP .20 ea.','(2 @ 8.75) 17.90','Total 17.90'],native:true}],{name:'synthetic-verified-bottle.jpg'},{ai:true});
+ assert.equal(verified.items[0].name,'Baby Duck');
+ assert.equal(verified.items[0].excludedFromPantry,true);
+});
+
+test('a dated zero-value header is metadata, and possessive spelling may shorten a grounded food label',()=>{
+ const lines=['SAMPLE GROCERY','01/01/24 $0.00','PRODUCE','(SALE) WHITE POMELO W $1.50','(SALE) RED POMELO W $2.50','DELI','FF SHEPHERDS PURSE FILLING W $3.00','TOTAL $7.00','Item count: 3'];
+ const doc=documentFrom([{lines,native:true,labels:[{line:6,name:"Shepherd's purse filling",section:'pantry'}]}],{name:'synthetic-bilingual.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>row.name),['WHITE POMELO','RED POMELO',"Shepherd's purse filling"]);
+ assert.deepEqual(doc.items.map(row=>row.amount),['1.50','2.50','3.00']);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.warnings,[]);
+});
+
 test('bilingual receipt annotations and multi-buy lines keep every separate purchase',()=>{
  const text=['SAMPLE MARKET','GROCERY $0.00','SAMPLE WASABI $6.59','示例山葵 90G','SAMPLE SPICE $2.99','示例香料','(SALE) SAMPLE MUSTARD STEM','191509 3 @3/$6.97 W $6.97','示例芥菜','(SALE) SAMPLE NOODLES $4.49','示例麵','DELI','SAMPLE SOY DRINK','2 @ $2.99ea. W $5.98','示例豆漿','TOTAL $27.02'].join('\n');
  const rows=parseReceipt(text),audit=auditReceipt(text,rows);
