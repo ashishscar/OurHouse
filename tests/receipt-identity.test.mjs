@@ -199,6 +199,31 @@ test('verified retailer SKU and receipt words resolve opaque products without an
  const doc=documentFrom([{lines:text.split('\n'),labels:[]}],{name:'synthetic.jpg'},{ai:true});
  assert.deepEqual(doc.items.map(row=>row.name),['Tortilla chips','Nacho cheese sauce']);
 });
+test('short display names use printed evidence and keep gift cards out of stock',()=>{
+ const text='COSTCO WHOLESALE\n305882 KS IBU 400M 16.99\n399 DOORDASH2X50 79.99\n401150 NANO 24X93ML 13.49\nSUBTOTAL 110.47';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>[row.name,row.section]),[
+  ['Ibuprofen','household'],['DoorDash gift cards',''],['Drinkable yogurt','kitchen']
+ ]);
+ assert.deepEqual(rows.map(row=>row.receiptName),['KS IBU 400M','DOORDASH2X50','NANO']);
+ assert.deepEqual(rows.map(row=>row.amount),['16.99','79.99','13.49']);
+ assert.deepEqual(rows.map(row=>row.raw),text.split('\n').slice(1,4));
+ assert.equal(rows[1].excludedFromPantry,true);
+ assert.equal(rows[1].exclusionReason,'non-stock');
+ assert.equal(rows[2].qty,2232);
+ assert.equal(rows[2].unit,'ml');
+ const otherStore=identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(1).join('\n'));
+ assert.deepEqual(otherStore.map(row=>row.name),['KS IBU 400M','DOORDASH2X50','NANO']);
+ assert.equal(otherStore[1].excludedFromPantry,true);
+ const mismatched=identifyReceiptItems([{name:'KS IBU 200M',itemNumber:'305882',raw:'305882 KS IBU 200M 16.99',amount:'16.99'}],[],text);
+ assert.equal(mismatched[0].name,'KS IBU 200M');
+});
+test('a recognizable produce abbreviation is Pantry without changing its receipt line',()=>{
+ const line='Tom Diced $10.76 C';
+ const row=identifyReceiptItems([{name:'Tom Diced',raw:line,amount:'10.76',qty:4,unit:'pcs'}])[0];
+ assert.deepEqual([row.name,row.section,row.receiptName,row.raw,row.amount,row.qty],['Diced tomatoes','kitchen','Tom Diced',line,'10.76',4]);
+ assert.equal(receiptSection('TOM TOY'),'');
+});
 test('a printed merchant prefix can be removed while keeping the product and receipt evidence',()=>{
  const text='CITRUS SPICE GROCERIES\nCITRUS SPICE WHOLE WHEAT FLOUR 2KG $3.49\nCITRUS SPICE RAW CASHEW 4 LB $8.99\nTOTAL $12.48';
  const rows=identifyReceiptItems(parseReceipt(text),[],text);

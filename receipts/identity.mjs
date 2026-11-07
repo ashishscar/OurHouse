@@ -23,7 +23,10 @@ const verifiedCatalog={walmart:{
  '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'},
  '232952':{terms:['COKE','ZERO'],name:'Coke Zero',section:'kitchen',source:'https://www.costco.ca/p/-/coca-cola-zero-355-ml-32-pack/100548619'},
  '1041477':{terms:['PINEAP','JUICE'],name:'Pineapple juice',section:'kitchen',source:'https://www.costco.ca/p/-/freshn-pure-pineapple-burst-juice-blend-6-1-l/100461737'},
- '1792990':{terms:['KS','PAD','JLA'],name:'Absorbent pads',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-absorbent-multipurpose-pads-100-count/4000281816'}
+ '1792990':{terms:['KS','PAD','JLA'],name:'Absorbent pads',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-absorbent-multipurpose-pads-100-count/4000281816'},
+ '305882':{terms:['KS','IBU','400M'],name:'Ibuprofen',section:'household',source:'https://cocoeast.ca/costco-east-pharmacy-vitamin-super-post-oct-25th-2023-ontario-atlantic-canada/305882kirkland-signature-ibuprofen-400mg-es-300-tablets15-99-4/'},
+ '399':{terms:['DOORDASH2X50'],name:'DoorDash gift cards',section:'',source:'https://www.costco.ca/p/-/doordash-2-x-50-e-gift-cards/4000311449'},
+ '401150':{terms:['NANO'],name:'Drinkable yogurt',section:'kitchen',source:'https://www.costco.ca/p/-/igo-assorted-15-nano-drinkable-yogurt-24-x-93-ml/100552352?langId=-24'}
 }};
 const words=value=>String(value||'').normalize('NFKC').toLowerCase().replace(/(\d+(?:[.,]\d+)?)\s*["″]/g,'$1 inch').replace(/(\d+(?:[.,]\d+)?)\s*%/g,(_,n)=>n.replace(/[.,]/,'decimal')+'percent').replace(/[^\p{L}\p{N}]+/gu,' ').trim().split(/\s+/).filter(Boolean).flatMap(w=>(aliases[w]||w).split(' '));
 const protectedWords=new Set('whole split ground sliced chopped diced skim skimmed homogenized unsalted salted salt seedless pulp no sugar reduced chocolate sweet spicy plain original black green red brown white raw organic frozen fine mini nylon ratlami surti surati bhavnagari mexican punjabi kewra rose basmati toor moong chilka khichadi paneer tikka masala sour condensed whipping french ranch jalapeno farali upavas'.split(' '));
@@ -31,10 +34,12 @@ protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania burger biscuit cracker boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai onion orange chicken drink jumbo'.split(' '))protectedWords.add(word);
-const household=/\b(?:backpacks?|body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|lys[o0]l|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|carry\s+bags?|reuse\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
+const household=/\b(?:backpacks?|body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|lys[o0]l|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|ibuprofen|ibu\s*\d{3,4}m|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|carry\s+bags?|reuse\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop)\b/i;
 const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|yog\s+drinks?|ayran|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|cherr(?:y|ies)|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|vinegar|spice|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem|chicken|onions?|soft\s+drinks?|limeade|m\s*&\s*ms\b|sprite|coconut|monster\s+(?:ultra|vrty))\b/i;
-export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)||/\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
+export function receiptSection(label){const expanded=words(label).join(' ');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||/\beggplants?\b/i.test(expanded)||/\btom\s+(?:diced|crushed|whole)\b|\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
 const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light)\b/i;
+// A gift card is a purchased expense but never stock, even at a grocery store.
+const nonStock=/\b(?:e?gift\s*cards?|doordash\s*\d+\s*x\s*\d+)\b/i;
 export function supportedName(proposed,receiptName){
  if(typeof proposed!=='string'||!proposed.trim()||proposed.length>80||/[\u0000-\u001f<>$₹£€@]/.test(proposed))return false;
  const source=new Set(words(receiptName)),candidate=words(proposed),actual=new Set(candidate);
@@ -133,6 +138,7 @@ function merchantProduct(receiptName,receiptText){
 const displayTokens={wtr:'Water',tiss:'Tissue',jmbo:'Jumbo',mnstr:'Monster',lys0l:'Lysol','0nions':'Onions','0range':'Orange'};
 function normalizedReceiptName(receiptName){
  if(!receiptSection(receiptName))return receiptName;
+ if(/^TOM\s+(?:DICED|CRUSHED|WHOLE)$/i.test(receiptName))return receiptName.replace(/^TOM\s+(DICED|CRUSHED|WHOLE)$/i,(_,form)=>`${form[0]}${form.slice(1).toLowerCase()} tomatoes`);
  return receiptName.replace(/\b(?:wtr|tiss|jmbo|mnstr|lys0l|0nions|0range)\b/gi,token=>displayTokens[token.toLowerCase()]||token);
 }
 function withinTwoEdits(a,b){
@@ -220,8 +226,8 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
-  const excluded=row.department==='exclude'||excludedFood.test(receiptName);
+  const excluded=row.department==='exclude'||excludedFood.test(receiptName)||nonStock.test(receiptName);
   const section=excluded?'':clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
+  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }
