@@ -40,6 +40,7 @@ function printedDepartment(line){
  return family?['HOME','HOUSEHOLD','CLEANING'].includes(family)?'household':'kitchen':'';
 }
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
+function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:bottle\s+)?deposit\s*$/i.test(priced.body)?priced.amount:null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
  const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|#-]+[A-Z]?)\s+(?=[A-Z])/i);
@@ -130,6 +131,8 @@ export function parseReceipt(text){
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
+  // A refundable till deposit contributes to the bill but is not stock.
+  if(separateDeposit(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   const discount=discountPrice(line),positive=discount&&line.replace(/\s*-\s*[$₹£€]?\s*\d+[.,]\d{2}(?:\s*[A-Z*]{1,3})?\s*$/i,'').match(ratePattern);
   // A coupon may be printed between a product and its count/rate. Hold a
   // candidate only across explicit discount metadata, then compare both nearby
@@ -214,13 +217,14 @@ export function parseReceipt(text){
 export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(row=>({...row,pick:false,confidence:'review'}));}
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}
 export function auditReceipt(text,items=pantryReceipt(text)){
- const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,purchaseDone=false;
- for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&!/^total\s+discount/i.test(line)&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
+ const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,charges=0,purchaseDone=false;
+ for(const raw of lines){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(!purchaseDone){const deposit=separateDeposit(line);if(deposit)charges+=Number(deposit);}if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&!/^total\s+discount/i.test(line)&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
+ if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*number\s+of\s+items\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
- const netSum=rounded(itemSum-discounts);
+ const netSum=rounded(itemSum+charges-discounts);
  if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
  if(footer.productCount&&packCount!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+packCount+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
  if(items.some(item=>item.warning))warnings.push('Some product quantities and unit prices do not match their line amounts. Check the flagged products.');
- return {itemSum:itemSum.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...footer,warnings};
+ return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...footer,warnings};
 }

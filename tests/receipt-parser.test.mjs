@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('a receipt deposit is a bill charge, not stock or an extra purchased item',()=>{
+ const lines=['FRESHCO','Yog Drink Ayran $1.79 HC','Simply Chy Limeade $3.19 H','+Deposit $0.10','Cherries Red $6.16 C','0.935 kg @ $6.59 / kg','INSTANT SAVINGS','-$1.00','SUBTOTAL $10.24','3','NUMBER OF ITEMS'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-freshco.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.qty,row.unit,row.section]),[
+  ['Yog Drink Ayran','1.79',1,'pcs','kitchen'],['Simply Chy Limeade','3.19',1,'pcs','kitchen'],['Cherries Red','6.16',0.935,'kg','kitchen']
+ ]);
+ assert.equal(doc.audit.itemSum,'11.14');
+ assert.equal(doc.audit.charges,'0.10');
+ assert.equal(doc.audit.discounts,'1.00');
+ assert.equal(doc.audit.netSum,'10.24');
+ assert.equal(doc.audit.productCount,3);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.audit.warnings,[]);
+ assert.equal(doc.ocr.text,lines.join('\n'));
+});
+
 test('Costco item codes, OCR O/0, discounts and product types survive a whole receipt',()=>{
  const lines=[
   'OSTCO WHOLESALE',

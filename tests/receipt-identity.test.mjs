@@ -244,6 +244,10 @@ test('verified food and household SKUs keep each price and printed label across 
  assert.equal(rows[2].raw,'1792990 KS PAD - JLA 21.49');
  assert.equal(identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(2).join('\n'))[2].name,'KS PAD - JLA');
 });
+test('food categories recognize weighed fruit, yogurt drinks, limeade and chocolate candy',()=>{
+ for(const label of ['Cherries Red','Yog Drink Ayran','Simply Chy Limeade','M&Ms Minis'])assert.equal(receiptSection(label),'kitchen',label);
+ for(const label of ['Cherry scented cleaner','Limeade shampoo','Mini tools'])assert.notEqual(receiptSection(label),'kitchen',label);
+});
 test('repeated item numbers repair one-letter OCR labels without merging purchases or hiding source lines',()=>{
  const lines=['123456 TEST TOVATO $2.11','123456 TEST TOMATO $3.22','123456 TEST TOMATO $4.33','654321 TEST TOVATO $5.44'];
  const rows=identifyReceiptItems(parseReceipt(lines.join('\n')));
