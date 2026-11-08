@@ -132,6 +132,7 @@ test('receipt viewer copies only the selected OCR characters',async()=>{
   w.eval("familyReceiptContext={actor:myUid,house:siteId,photoUrl:'blob:synthetic-receipt',document:{ocr:{text:'MILK 2L $5.99'}}}");
   w.openReceiptTextView();
   assert.equal(transcript.textContent,line);
+  assert.equal(w.document.getElementById('receiptTextOriginal').getAttribute('href'),'blob:synthetic-receipt');
   const range=w.document.createRange(),start=line.indexOf('5.99');
   range.setStart(transcript.firstChild,start);
   range.setEnd(transcript.firstChild,start+4);
@@ -140,6 +141,8 @@ test('receipt viewer copies only the selected OCR characters',async()=>{
   w.copySelectedReceiptText();
   await Promise.resolve();
   assert.equal(copied,'5.99');
+  w.closeReceiptTextView();
+  assert.equal(w.document.getElementById('receiptTextOriginal').hasAttribute('href'),false);
   assert.deepEqual(h.errors,[]);
  }finally{h.close();}
 });
