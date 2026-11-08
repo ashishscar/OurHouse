@@ -41,6 +41,9 @@ const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|yog\s+drinks?|ayran|dahi|paneer
 const frenchFood=/\b(?:espres(?:so)?|cafe|confitures?|mais|raisins?|tomates?|laitues?|potimarrons?|basma(?:ti|i)|torsades|skyr|moutarde|myrtilles?)\b/i;
 export function receiptSection(label){const expanded=words(label).join(' '),folded=expanded.normalize('NFD').replace(/\p{M}/gu,'');return household.test(label)||household.test(expanded)?'household':food.test(label)||food.test(expanded)||frenchFood.test(folded)||/\beggplants?\b/i.test(expanded)||/\btom\s+(?:diced|crushed|whole)\b|\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
 const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light|thon|poisson|poulet|poule|jambon|porc|agneau|canard|saucisson|viande|sardines?|boeuf|bœuf|vins?|champagnes?|cr[eé]mant)\b/i;
+// An OCR label cannot establish whether a ripened cheese uses animal rennet.
+// Paneer is acid-set; otherwise leave cheese products unassigned for review.
+const uncertainRennet=/\b(?:cheese|fromage|morbier|fourme|brie|camembert|gruy[eè]re|gouda|cheddar|parmesan|feta|emmental)\b/i;
 // A gift card is a purchased expense but never stock, even at a grocery store.
 const nonStock=/\b(?:e?gift\s*cards?|doordash\s*\d+\s*x\s*\d+)\b/i;
 export function supportedName(proposed,receiptName){
@@ -253,7 +256,8 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // spinach filling can override the section, but an explicit meat word cannot.
   const vegetarianPasta=/\b(?:tortellini|ravioli)\b.*\b(?:ricott|epin|spinach|fromage|cheese)/i.test(receiptName)&&!excludedFood.test(receiptName);
   const excluded=row.department==='exclude'&&!clear&&!vegetarianPasta||verified?.section==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
-  const section=excluded?'':clear||verified?.section||(vegetarianPasta?'kitchen':'')||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
+  const rennetReview=uncertainRennet.test(receiptName)&&!/\b(?:paneer|vegan|plant.based|vegetarian|microbial\s+rennet)\b/i.test(receiptName);
+  const section=excluded||rennetReview?'':clear||verified?.section||(vegetarianPasta?'kitchen':'')||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
+  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),...(rennetReview?{warning:[row.warning,'Check whether this cheese contains animal rennet before adding it to a vegetarian pantry.'].filter(Boolean).join(' ')}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }

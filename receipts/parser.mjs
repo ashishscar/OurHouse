@@ -27,13 +27,20 @@ function repairReconciledRateGlyph(line,knownTotal=null){
 function printedDepartment(line){
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|DELI|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)(?:\s+\$?0[.,]00)?\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
+ if(splitPrice(line))return '';
  // French supermarket receipts use unpriced department lines. Match the
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
  const compact=line.toUpperCase().replace(/[^A-Z]/g,'');
- const french=[['AIDESALACUISINE','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen'],['CHAMPAGNESMOUSSEUX','exclude'],['VINSAOC','exclude'],['MOBILIER','household'],['PARFUMERIE','household'],['PRODUITSVAISSELLE','household']];
+ const french=[['AIDESALACUISINE','kitchen'],['CONDIMENTSSAUCESFROIDES','kitchen'],['CONFITURESMIELPATARTINER','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['FROMAGECOUPEEMBALLE','kitchen'],['FRUITS','kitchen'],['LEGUMES','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen'],['CHAMPAGNESMOUSSEUX','exclude'],['VINSAOC','exclude'],['MOBILIER','household'],['PARFUMERIE','household'],['PRODUITSVAISSELLE','household']];
  const edits=(a,b)=>{let prior=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(a[i-1]!==b[j-1]));prior=next;}return prior[b.length];};
- for(const [heading,section] of french)if(compact===heading||heading.length>=8&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=2)return section;
+ for(const [heading,section] of french)if(compact===heading||heading.length>=6&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=(heading.length>=8?2:1))return section;
+ // Thin thermal print can damage several letters in a long department
+ // heading. Require two recognizable category words before discarding it.
+ if(/^CONDI/.test(compact)&&compact.includes('SAUCES'))return 'kitchen';
+ if(/^CONFI/.test(compact)&&compact.includes('MIEL')&&compact.length>17)return 'kitchen';
+ if(/^FROMA/.test(compact)&&compact.includes('COUPE')&&/(?:EMBALL|EMDAL)/.test(compact))return 'kitchen';
+ if(compact.length===3&&edits(compact,'RIZ')===1)return 'kitchen';
  const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z0-9]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
  if(!numbered)return '';
  const label=numbered[1].toUpperCase();
@@ -60,7 +67,7 @@ function repairMeasurementZeros(name){
  return name.replace(/\b([\dOo]{2,5})(?=(?:GMS?|KG|ML|LB|L)\b)/gi,value=>/\d/.test(value)?value.replace(/[Oo]/g,'0'):value);
 }
 function quantity(body){
- let name=repairMeasurementZeros(body).replace(/^\(SALE\)\s*/i,'').replace(/^(?:H?MRJ|RQ|HQ)\s+(?=(?:\(?\d{5,14}\)?\s+)?[A-Z])/i,'').replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ|RQ|HQ|W)\s*$/i,'').replace(/\s+\((?:[TD]{1,2})?\)\s*$/i,''),count=1,known=false;
+ let name=repairMeasurementZeros(body).replace(/^\(SALE\)\s*/i,'').replace(/^(?:H?MRJ|RQ|HQ)\s+(?=(?:\(?\d{5,14}\)?\s+)?[A-Z])/i,'').replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ|RQ|HQ|W)\s*$/i,'').replace(/\s+(?:\([TDOI1\u3400-\u9fff]\)?|[TDOI1]\))\s*$/i,''),count=1,known=false;
  // Walmart-style tills put a 12-digit barcode after the printed label.
  // Preserve it as identity evidence, never as part of the display name.
  const trailingCode=name.match(/\s+(\d{11,14})$/)?.[1];

@@ -28,6 +28,14 @@ test('French receipt departments and literal OCR rate lines keep food, wine and 
  assert.equal(receiptSection('ESPRES SPLEND.CAPS'),'kitchen');
  assert.equal(receiptSection('RI2 BASMAI U BIO'),'kitchen');
 });
+test('unverified cheese is held for vegetarian review while paneer remains food',()=>{
+ const text='FROMAGE COUPE EMBALLE\nMORBIER AOP 45 JOURS 4.22 € 11\nFOURME D AMBERT AOP 1.98 € 11\nPANEER 5.00 € 11\nTOTAL 11.20 €';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>row.section),['','','kitchen']);
+ assert.match(rows[0].warning,/animal rennet/);
+ assert.match(rows[1].warning,/animal rennet/);
+ assert.equal(rows[2].warning,undefined);
+});
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
@@ -209,7 +217,8 @@ test('document evidence and product identity remain separate from quantities, am
 test('verified retailer SKU and receipt words resolve opaque products without an outside scan request',()=>{
  const text='COSTCO WHOLESALE\n161552 KS QUE PASA $6.99\n1081570 MF CHEESE SA $13.99\nTOTAL $20.98';
  const rows=identifyReceiptItems(parseReceipt(text),[],text);
- assert.deepEqual(rows.map(row=>[row.name,row.section,row.nameSource]),[['Tortilla chips','kitchen','verified-catalog'],['Nacho cheese sauce','kitchen','verified-catalog']]);
+ assert.deepEqual(rows.map(row=>[row.name,row.section,row.nameSource]),[['Tortilla chips','kitchen','verified-catalog'],['Nacho cheese sauce','','verified-catalog']]);
+ assert.match(rows[1].warning,/animal rennet/);
  assert.deepEqual(rows.map(row=>[row.receiptName,row.amount]),[['KS QUE PASA','6.99'],['MF CHEESE SA','13.99']]);
  const wrongStore=identifyReceiptItems(parseReceipt(text),[],'OTHER STORE\n'+text.split('\n').slice(1).join('\n'));
  assert.deepEqual(wrongStore.map(row=>row.name),['KS QUE PASA','MF CHEESE SA']);

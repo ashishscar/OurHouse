@@ -516,3 +516,14 @@ test('French weighed rate uses arithmetic and leaves a mismatched weight for rev
  assert.equal(rows[1].quantityKnown,false);
  assert.match(rows[1].warning,/weight × unit price/);
 });
+
+test('damaged French departments stay separate from priced product labels',()=>{
+ const text='CONDINENIS-SAUCES FRO DF\nOLIVES NYONS 230G (T) 3.62 € 11\nCONFIMURES MIEL P.A.TMRIINER\nCONFITURE MYRTILLES 370G (T) 2.64 € 11\nFRUITS\nRAISIN NOIR MUSCAT (T) 3.04 € 11\nLEGUNES\nTOMATE RONDE EN GRAPPE (市) 5.47 € 11\nKIZ\nRIZ 10MN RAPIDE 900G (T) 4.30 € 11\nTOTAL 19.07 €';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[
+  ['OLIVES NYONS','3.62'],['CONFITURE MYRTILLES','2.64'],
+  ['RAISIN NOIR MUSCAT','3.04'],['TOMATE RONDE EN GRAPPE','5.47'],
+  ['RIZ 10MN RAPIDE','4.30']
+ ]);
+ assert.deepEqual(parseReceipt('CONFITURE MIEL 370G 2.64 € 11\nTOTAL 2.64 €').map(row=>row.name),['CONFITURE MIEL']);
+});
