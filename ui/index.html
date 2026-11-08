@@ -1751,7 +1751,8 @@ Instructions
   <div class="shead"><h3><span data-icon="receipt" data-icon-size="19"></span>Scanned items</h3><button class="btn sm grey" onclick="closeAllSheets()">Close</button></div>
   <div class="sbody">
     <p class="finehint" style="margin:0 0 12px" id="scanReviewIntro"></p>
-    <button type="button" class="btn tint block" onclick="openReceiptTextView()">View photo & select text</button>
+    <a id="receiptOriginalQuick" class="btn tint block" target="_blank" rel="noopener" aria-label="Open original receipt photo for text selection">Open original photo · select text</a>
+    <button type="button" class="btn grey block" style="margin-top:8px" onclick="openReceiptTextView()">Compare photo with scanned text</button>
     <div id="scanReceiptDetails" style="margin-bottom:16px"></div>
     <div id="scanReviewList"></div>
     <button class="btn grey block" onclick="addMissingReceiptItem()">Add a missing product</button>

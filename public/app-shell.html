@@ -6,7 +6,7 @@
 (()=>{const query=new URLSearchParams(location.search);if(window.OurHouseAuth||query.get('test')==='1'||query.get('legacy')==='1')return;window.OurHouseConfigRequest=fetch('/api/config',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000)}).catch(()=>null);})();
 </script>
 <link rel="preload" as="script" href="/ourhouse-auth.js?v=2b8d9b6dc336" fetchpriority="high">
-<link rel="preload" as="script" href="/assets/app-core-b422c163be54fa9d.js" fetchpriority="high">
+<link rel="preload" as="script" href="/assets/app-core-ce198b19b3c4344a.js" fetchpriority="high">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -770,7 +770,8 @@ Instructions
   <div class="shead"><h3><span data-icon="receipt" data-icon-size="19"></span>Scanned items</h3><button class="btn sm grey" onclick="closeAllSheets()">Close</button></div>
   <div class="sbody">
     <p class="finehint" style="margin:0 0 12px" id="scanReviewIntro"></p>
-    <button type="button" class="btn tint block" onclick="openReceiptTextView()">View photo & select text</button>
+    <a id="receiptOriginalQuick" class="btn tint block" target="_blank" rel="noopener" aria-label="Open original receipt photo for text selection">Open original photo · select text</a>
+    <button type="button" class="btn grey block" style="margin-top:8px" onclick="openReceiptTextView()">Compare photo with scanned text</button>
     <div id="scanReceiptDetails" style="margin-bottom:16px"></div>
     <div id="scanReviewList"></div>
     <button class="btn grey block" onclick="addMissingReceiptItem()">Add a missing product</button>
@@ -889,6 +890,6 @@ Instructions
 <script defer src="./expense-cache.js"></script>
 <script defer src="./expense-receipts.js"></script>
 <script defer src="/ourhouse-auth.js?v=2b8d9b6dc336"></script><script defer src="/ourhouse-app.js?v=1a22d85228ed"></script><script defer src="/ourhouse-sync.js?v=34abefcae6cc"></script><script defer src="/ourhouse-metrics.js?v=7c8c6300cd49"></script><script defer src="/ourhouse-cover.js?v=60b953b80398"></script><script defer src="/user-guide.js?v=ec95be610e9d"></script><script defer src="/ourhouse-maintenance.js?v=615fd363ef83"></script><script defer src="/ourhouse-receipts.js?v=e0246370c532"></script><script defer src="/ourhouse-test.js?v=4d9a8f257a73"></script><script defer src="/roomio-vault.js?v=b4ad60db5922"></script><script defer src="/roomio-recipes.js?v=dde72c58f99c"></script>
-<script type="application/json" id="ourhouse-feature-map">{"expenses":"/assets/expenses-7e76b0433285c066.js","water":"/assets/water-cb1f5a95f71a227f.js"}</script><script defer src="/ourhouse-features.js?v=8193bde96b31"></script><script defer src="/assets/app-core-b422c163be54fa9d.js"></script>
+<script type="application/json" id="ourhouse-feature-map">{"expenses":"/assets/expenses-7e76b0433285c066.js","water":"/assets/water-cb1f5a95f71a227f.js"}</script><script defer src="/ourhouse-features.js?v=8193bde96b31"></script><script defer src="/assets/app-core-ce198b19b3c4344a.js"></script>
 </body>
 </html>
