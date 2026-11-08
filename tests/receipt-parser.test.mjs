@@ -495,3 +495,24 @@ test('a printed six-pack is one package and a trailing W tax code is not part of
  assert.equal(rows[0].packCount,2);
  assert.equal(rows[0].amount,'27.98');
 });
+
+test('implausibly large OCR package sizes require stock correction',()=>{
+ const [row]=parseReceipt('DISH SOAP 2504L $2.83\nTOTAL $2.83');
+ assert.equal(row.amount,'2.83');
+ assert.equal(row.qty,1);
+ assert.equal(row.unit,'pcs');
+ assert.equal(row.quantityKnown,false);
+ assert.match(row.warning,/implausibly large/);
+ assert.match(row.raw,/2504L/);
+});
+
+test('French weighed rate uses arithmetic and leaves a mismatched weight for review',()=>{
+ const rows=parseReceipt('CHEESE 4.22 € 11\nPesée manuelle\n0.,302 kg X 13.99 (/kg\nTOMATO 5.47 € 11\nPes@e nanuelle\n1.371 kg X 3.93 t/kg\nTOTAL 9.69 €');
+ assert.equal(rows.length,2);
+ assert.equal(rows[0].qty,0.302);
+ assert.equal(rows[0].unit,'kg');
+ assert.equal(rows[0].amount,'4.22');
+ assert.equal(rows[1].amount,'5.47');
+ assert.equal(rows[1].quantityKnown,false);
+ assert.match(rows[1].warning,/weight × unit price/);
+});

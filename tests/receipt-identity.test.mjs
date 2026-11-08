@@ -18,6 +18,16 @@ test('French fish and meat labels remain excluded while vegetarian labels can en
  assert.equal(qualifiedReceiptName('Legumes','TEST BOUILL LEGUMES'),'Bouill Legumes');
  assert.equal(qualifiedReceiptName('Bouill','TEST BOUILL LEGUMES'),'');
 });
+test('French receipt departments and literal OCR rate lines keep food, wine and household separate',()=>{
+ const text='CHAMPAGNES MOUSSEUX\n12.00 € 13\nSAMPLE CUVEE 75CL\n2 X 6.00 UF\nCONDIMENTS-SAUCES FROIDES\nOLIVES 3.00 € 11\n1 X 3.00 EUR\nMOBILIER\nCINTRE 2.00 € 13\n1 X 2.00 EUR\nVINS AOC\nSAMPLE BOTTLE RG 75CL 9.00 € 13\n1 X 9.00 EUR\nTOTL [5] Articles 26.00 €\nSOUS-TOTAL 22.00 € 4.00 B\nTOTAL TVA 4.00 B';
+ const items=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(items.map(item=>[item.amount,item.section,item.packCount]),[['12.00','',2],['3.00','kitchen',1],['2.00','household',1],['9.00','',1]]);
+ assert.deepEqual(auditReceipt(text,items).warnings,[]);
+ assert.equal(auditReceipt(text,items).subtotal,undefined);
+ assert.equal(receiptSection('ÉSPRESSO'),'kitchen');
+ assert.equal(receiptSection('ESPRES SPLEND.CAPS'),'kitchen');
+ assert.equal(receiptSection('RI2 BASMAI U BIO'),'kitchen');
+});
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);
