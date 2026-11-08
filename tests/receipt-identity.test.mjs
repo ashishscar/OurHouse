@@ -7,6 +7,17 @@ test('verified food types are pantry even when a receipt omits the word snack',(
  for(const label of ['DP SPICY VEGGIE BURGERS','DP ORIGINAL KHARI','MUZDA MAKHANIA','BALAJI CRUNCHEM','BR 5050 SWEET&SALTY FAMILY','COKE DIET'])assert.equal(receiptSection(label),'kitchen',label);
  for(const label of ['BR 5050 FAMILY','UNKNOWN SWEET&SALTY FAMILY','COLDWTR CLEANER'])assert.notEqual(receiptSection(label),'kitchen',label);
 });
+test('French fish and meat labels remain excluded while vegetarian labels can enter Pantry',()=>{
+ const rows=[
+  {name:'TEST THON',raw:'TEST THON 2,40 €',amount:'2.40',qty:1,unit:'pcs'},
+  {name:'TEST TABOULE POULE',raw:'TEST TABOULE POULE 3,20 €',amount:'3.20',qty:1,unit:'pcs'},
+  {name:'TEST CHIPOS VEGETALES',raw:'TEST CHIPOS VEGETALES 4,10 €',amount:'4.10',qty:1,unit:'pcs'}
+ ];
+ const named=identifyReceiptItems(rows,[],'SAMPLE MARCHE');
+ assert.deepEqual(named.map(row=>[row.section,Boolean(row.excludedFromPantry)]),[['',true],['',true],['kitchen',false]]);
+ assert.equal(qualifiedReceiptName('Legumes','TEST BOUILL LEGUMES'),'Bouill Legumes');
+ assert.equal(qualifiedReceiptName('Bouill','TEST BOUILL LEGUMES'),'');
+});
 test('short receipt names remain grounded in the print and retain type, flavour and fat percentage',()=>{
  for(const [name,source] of [['35% Whipping cream','TEST BRAND WHIPPING CREAM 35%'],['Toor dal','TEST BRAND TOOR DAL'],['Split cashews','TEST BRAND CASHEW SPLIT'],['Spicy vegetable burgers','TEST BRAND SPICY VEGGIE BURGERS'],['Nylon gathiya','TEST BRAND NYLON GATHIYA']])assert.ok(supportedName(name,source));
  for(const [name,source] of [['Cream','TEST BRAND WHIPPING CREAM 35%'],['Cashews','TEST BRAND CASHEW SPLIT'],['Rice','TEST BRAND TOOR DAL'],['Toothpaste','TEST BRAND BLUE'],['Red bhakharwadi','RD MINI BHAKHARWADI'],['TEST BRAND','TEST BRAND RICE'],['Whipping','TEST BRAND WHIPPING CREAM'],['Chili','TEST BRAND THAI CHILLI'],['<img src=x>','TEST BRAND RICE']])assert.equal(supportedName(name,source),false);

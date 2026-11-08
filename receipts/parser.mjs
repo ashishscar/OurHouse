@@ -2,13 +2,13 @@
 import {printedReceiptCount} from './metadata.mjs';
 const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
-const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})\.?(?:\s*(?:CAD|USD|INR|GBP|EUR))?\s*(?:[A-Z*×]{1,4}[\d\[\]]{0,2}|[\u3400-\u9fff])?$`,'i');
+const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})\.?(?:\s*(?:CAD|USD|INR|GBP|EUR|€|£|₹))?\s*(?:[A-Z*×]{1,4}[\d\[\]]{0,2}|\d{1,2}|[\u3400-\u9fff])?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
-const noise=/^(?:(?:(?:sub[\s-]*|grand\s*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
+const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
-const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:1\s*/\s*)?(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?(?:\s+(?:H?MRJ|W))?\s*$`,'i');
+const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:1\s*/\s*)?(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?(?:\s+(?:H?MRJ|W|EUR|€))?\s*$`,'i');
 const bareDiscount=new RegExp(String.raw`^\s*(?:-\s*(?:${currency})?\s*\d+[.,]\d{2}|(?:${currency})?\s*\d+[.,]\d{2}\s*-)(?:\s*[A-Z*]{1,3})?\s*$`,'i');
 const num=s=>Number(String(s).replace(/\s/g,'').replace(',','.'));
 const rounded=n=>Math.round(n*1e6)/1e6;
@@ -27,6 +27,13 @@ function repairReconciledRateGlyph(line,knownTotal=null){
 function printedDepartment(line){
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|DELI|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)(?:\s+\$?0[.,]00)?\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
+ // French supermarket receipts use unpriced department lines. Match the
+ // whole heading (allowing two OCR edits on longer labels), never a product
+ // substring, so a wrapped product cannot silently change departments.
+ const compact=line.toUpperCase().replace(/[^A-Z]/g,'');
+ const french=[['AIDESALACUISINE','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen']];
+ const edits=(a,b)=>{let prior=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(a[i-1]!==b[j-1]));prior=next;}return prior[b.length];};
+ for(const [heading,section] of french)if(compact===heading||heading.length>=8&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=2)return section;
  const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z0-9]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
  if(!numbered)return '';
  const label=numbered[1].toUpperCase();
@@ -53,7 +60,7 @@ function repairMeasurementZeros(name){
  return name.replace(/\b([\dOo]{2,5})(?=(?:GMS?|KG|ML|LB|L)\b)/gi,value=>/\d/.test(value)?value.replace(/[Oo]/g,'0'):value);
 }
 function quantity(body){
- let name=repairMeasurementZeros(body).replace(/^\(SALE\)\s*/i,'').replace(/^(?:H?MRJ|RQ|HQ)\s+(?=(?:\(?\d{5,14}\)?\s+)?[A-Z])/i,'').replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ|RQ|HQ|W)\s*$/i,''),count=1,known=false;
+ let name=repairMeasurementZeros(body).replace(/^\(SALE\)\s*/i,'').replace(/^(?:H?MRJ|RQ|HQ)\s+(?=(?:\(?\d{5,14}\)?\s+)?[A-Z])/i,'').replace(/^\(\d{1,3}\)\s*(?=\d{3,14}\b)/,'').replace(/^[A-Z]\s+(?=\d{3,14}\s)/,'').replace(/\s+(?:H?MRJ|RQ|HQ|W)\s*$/i,'').replace(/\s+\((?:[TD]{1,2})?\)\s*$/i,''),count=1,known=false;
  // Walmart-style tills put a 12-digit barcode after the printed label.
  // Preserve it as identity evidence, never as part of the display name.
  const trailingCode=name.match(/\s+(\d{11,14})$/)?.[1];
@@ -158,9 +165,9 @@ export function parseReceipt(text){
   if(last&&/[\u3400-\u9fff]/u.test(line)&&!splitPrice(line)&&last.raw.split('\n').at(-1).trim()===lines[lineIndex-1]&&/[A-Za-z]{2}/.test(lines[lineIndex+1]||'')&&!(splitPrice(lines[lineIndex+1]||'')?.body==='')){last.raw+='\n'+line;continue;}
   // Standalone tax codes are columns, not labels; retain the pending item.
   if(/^(?:H?MRJ|RQ|HQ)$/i.test(line))continue;
-  if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
+  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
-  if(rows.length&&/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
+  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
   // A refundable till deposit contributes to the bill but is not stock.
   if(separateDeposit(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){
@@ -255,19 +262,22 @@ export function parseReceipt(text){
   if(rows.length>=500)break;
  }
  finishRate();
- return rows.map(row=>({...row,...(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice)-Number(row.includedDeposit||0))>.03?{warning:'The quantity × unit price does not match this product amount. Check the photo before selecting it.'}:{})}));
+ return rows.map(row=>{
+  const suspectPack=!row.packSize&&/(?:^|\s)(?:[IlS]\d{0,3}(?:KG|G|ML)|\d{1,3}X\d{1,4}[6@])\b/i.test(row.name);
+  return {...row,...(suspectPack?{quantityKnown:false,warning:'The package size may have been misread. Check the photo and enter the stock quantity before selecting this product.'}:{}),...(row.unitPrice!==undefined&&Math.abs(Number(row.amount)-row.rateQuantity*Number(row.unitPrice)-Number(row.includedDeposit||0))>.03?{warning:'The quantity × unit price does not match this product amount. Check the photo before selecting it.'}:{})};
+ });
 }
 export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(row=>({...row,pick:false,confidence:'review'}));}
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}
 export function auditReceipt(text,items=pantryReceipt(text)){
  const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,charges=0,purchaseDone=false;
- for(const [index,raw] of lines.entries()){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(!purchaseDone){const deposit=separateDeposit(line);if(deposit)charges+=Number(deposit);else if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){const next=splitPrice(lines[index+1]||''),rate=next?.body.match(ratePattern);if(rate&&Math.abs(num(rate[1])*num(rate[3])-Number(next.amount))<=.03)charges+=Number(next.amount);}}if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&!/^total\s+discount/i.test(line)&&/^\s*(?:sub[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^\s*sub/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
+ for(const [index,raw] of lines.entries()){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(!purchaseDone){const deposit=separateDeposit(line);if(deposit)charges+=Number(deposit);else if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){const next=splitPrice(lines[index+1]||''),rate=next?.body.match(ratePattern);if(rate&&Math.abs(num(rate[1])*num(rate[3])-Number(next.amount))<=.03)charges+=Number(next.amount);}}if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);if(p&&!/^total\s+discount/i.test(line)&&/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\b/i.test(line)){footer[/^(?:sub|sous)/i.test(line)?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
  if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*number\s+of\s+items\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
  const netSum=rounded(itemSum+charges-discounts);
  if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
  if(footer.productCount&&packCount!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+packCount+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
- if(items.some(item=>item.warning))warnings.push('Some product quantities and unit prices do not match their line amounts. Check the flagged products.');
+ if(items.some(item=>item.warning))warnings.push('Some product quantities or package sizes need review. Check the flagged products against the photo.');
  return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...footer,warnings};
 }

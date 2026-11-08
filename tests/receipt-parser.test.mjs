@@ -50,6 +50,32 @@ test('a dated zero-value header is metadata, and possessive spelling may shorten
  assert.deepEqual(doc.warnings,[]);
 });
 
+test('French price tax codes and EUR quantity continuations retain each purchased line',()=>{
+ const lines=['SAMPLE MARCHE','AIDES A LA CUISINE','TEST BOUILLON LEGUMES € 1,22 5','1 X 1,22 EUR','CONSERVES DE POISSON','TEST THON 2,40 € 5','ULTRA FRAIS','TEST YAOURT 125G 3,00 € 5','TOTAL [3] Articles','SOUS-TOTAL 6,62 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-market.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.packCount,row.section]),[
+  ['TEST BOUILLON LEGUMES','1.22',1,'kitchen'],
+  ['TEST THON','2.40',1,''],
+  ['TEST YAOURT','3.00',1,'kitchen']
+ ]);
+ assert.equal(doc.items[1].excludedFromPantry,true);
+ assert.equal(doc.audit.productCount,3);
+ assert.equal(doc.audit.packCount,3);
+});
+
+test('French section headings are whole lines; similar product names stay products',()=>{
+ const rows=parseReceipt('EPICES\nTEST EPICES DOUCES 1,50 € 5\nTEST PATES AU RIZ 2,50 € 5\nTOTAL 4,00 €');
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[
+  ['TEST EPICES DOUCES','1.50'],['TEST PATES AU RIZ','2.50']
+ ]);
+});
+
+test('an OCR-damaged pack size cannot masquerade as a known one-piece stock quantity',()=>{
+ const rows=parseReceipt('TEST RIZ IKG 3,18 € 5\n1 X 3,18 EUR\nTEST PASTA S00G 1,06 € 5\nTEST YOGURT 8X1256 3,50 € 5\nTOTAL 7,74 €');
+ assert.equal(rows.length,3);
+ for(const row of rows){assert.equal(row.quantityKnown,false);assert.match(row.warning,/package size may have been misread/);}
+});
+
 test('bilingual receipt annotations and multi-buy lines keep every separate purchase',()=>{
  const text=['SAMPLE MARKET','GROCERY $0.00','SAMPLE WASABI $6.59','示例山葵 90G','SAMPLE SPICE $2.99','示例香料','(SALE) SAMPLE MUSTARD STEM','191509 3 @3/$6.97 W $6.97','示例芥菜','(SALE) SAMPLE NOODLES $4.49','示例麵','DELI','SAMPLE SOY DRINK','2 @ $2.99ea. W $5.98','示例豆漿','TOTAL $27.02'].join('\n');
  const rows=parseReceipt(text),audit=auditReceipt(text,rows);

@@ -13,6 +13,8 @@ function oneEdit(a,b){
 }
 export function printedReceiptCount(line){
  if(typeof line!=='string'||line.length>160)return null;
+ const french=line.trim().match(/^TOTAL\s*\[(\d{1,4})\]\s+Ar\s*ticles\b/i);
+ if(french)return {label:'Total articles',value:french[1],printed:line,headingCorrected:false};
  let m=line.trim().match(/^([a-z]{5,7})\s+of\s+(products|items)\s*[:=]?\s*(\d{1,4})\s*$/i);
  if(m&&oneEdit(m[1].toLowerCase(),'number'))return{label:'Number of '+m[2].toLowerCase(),value:m[3],printed:line,headingCorrected:m[1].toLowerCase()!=='number'};
  m=line.trim().match(/^#?\s*(items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\s*$/i);
