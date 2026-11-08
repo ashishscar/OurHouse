@@ -248,8 +248,11 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
   // product type still wins when a store puts non-food goods under Grocery.
-  const excluded=row.department==='exclude'||verified?.section==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
-  const section=excluded?'':clear||verified?.section||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
+  // Some deli sections sell vegetarian filled pasta. A printed ricotta or
+  // spinach filling can override the section, but an explicit meat word cannot.
+  const vegetarianPasta=/\b(?:tortellini|ravioli)\b.*\b(?:ricott|epin|spinach|fromage|cheese)/i.test(receiptName)&&!excludedFood.test(receiptName);
+  const excluded=row.department==='exclude'&&!vegetarianPasta||verified?.section==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
+  const section=excluded?'':clear||verified?.section||(vegetarianPasta?'kitchen':'')||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
   return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }

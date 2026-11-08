@@ -31,7 +31,7 @@ function printedDepartment(line){
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
  const compact=line.toUpperCase().replace(/[^A-Z]/g,'');
- const french=[['AIDESALACUISINE','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen']];
+ const french=[['AIDESALACUISINE','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen']];
  const edits=(a,b)=>{let prior=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(a[i-1]!==b[j-1]));prior=next;}return prior[b.length];};
  for(const [heading,section] of french)if(compact===heading||heading.length>=8&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=2)return section;
  const numbered=line.match(/^\d{1,2}\s*[-–]\s*([A-Z0-9]{4,12})(?:\s+[A-Z]{3,14})?\s*:?\s*$/i);
@@ -100,7 +100,17 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
  return row;
 }
 export function parseReceipt(text){
- const lines=String(text||'').slice(0,200000).split(/\r?\n/).map(x=>repairReconciledRateGlyph(x.replace(/\u00a0/g,' ').trim())).filter(Boolean),rows=[];
+ const source=String(text||'').slice(0,200000);
+ // French tills often append a VAT code after the euro sign. An OCR reader
+ // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
+ // glyphs on a receipt with independent French/euro footer evidence.
+ const frenchEuro=/(?:Article\(s\)|REDUCTIONS INMEDIATES|RESTE A PAYER)/i.test(source)&&source.includes('€');
+ const lines=source.split(/\r?\n/).map(x=>{
+  const trimmed=x.replace(/\u00a0/g,' ').trim();
+  let repaired=frenchEuro?trimmed.replace(/(\d+[.,]\d{2})\s*[ct(46](?=\s+(?:\d+[.,]\d{2}|1[13]\b))/gi,'$1 €'):trimmed;
+  if(frenchEuro&&/^\d{1,3}\s*[x×]\s*\d+[.,]\d{2}\s*[ct(46]$/i.test(repaired))repaired=repaired.replace(/[ct(46]$/i,'€');
+  return repairReconciledRateGlyph(repaired);
+ }).filter(Boolean),rows=[];
  let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='';const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.

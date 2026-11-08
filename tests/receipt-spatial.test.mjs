@@ -55,3 +55,17 @@ test('a tax marker remains part of a price on an angled receipt',()=>{
  assert.ok(result.lines.includes('Final Sale'));
  assert.ok(result.lines.includes('Shopping Bag $0.35 Tx1'));
 });
+
+test('document baseline and separate unit-price column preserve every literal amount',()=>{
+ const texts=['TEST APPLES','TEST PEARS','TEST JUICE','3 X','2.42 (','TEST MILK','TEST BREAD','TEST OATS','1.99 €','4.99 ( 11','3.49 € 11','7.26 6 11','2.00 € 11','1.50 € 11','4.25 € 11'];
+ const ys=[10,40,70,88,88,110,140,170,150,10,40,70,110,140,170];
+ const boxes=texts.map((t,i)=>{const x=i===4||i===8?115:i>=9?190:i===3?40:10,w=i===4||i===8?55:i>=9?80:110;return quad(x,ys[i]+.02*x,w,12,i>=9?.16:.02)});
+ const record={texts,boxes,scores:texts.map(()=>.98),baseline_slope:.02};
+ const result=assembleSpatial(record,{threshold:1.2,margin:.05});
+ assert.ok(result.price_column>115&&result.price_column<190);
+ assert.deepEqual(result.lines.filter(x=>x.startsWith('TEST ')),[
+  'TEST APPLES 4.99 ( 11','TEST PEARS 3.49 € 11','TEST JUICE 7.26 6 11','TEST MILK 2.00 € 11','TEST BREAD 1.50 € 11','TEST OATS 4.25 € 11'
+ ]);
+ assert.ok(result.lines.includes('2.42 ('));
+ assert.equal(record.texts[9],'4.99 ( 11');
+});

@@ -1,5 +1,8 @@
 // Assemble quadrilateral OCR boxes into receipt rows without changing literal text.
-const pricePattern=/^\s*\*?\s*(?:[-−]\s*)?\$?\s*\d+[.,]\d{2}(?:\s*[-−])?\s*(?:[A-Z*]{0,3}|TX[1I\]])\s*$/i;
+// Keep the recognized glyph verbatim. French tills often put a VAT code after
+// an euro sign that OCR can read as (, c, t, 4 or 6. The parser may repair
+// that glyph later, with independent receipt evidence.
+const pricePattern=/^\s*(?:W\s+)?\*?\s*(?:[-−]\s*)?\$?\s*\d+[.,]\d{2}(?:\s*[-−])?\s*(?:(?:[€(ct46]\s*)?1[13]|[€(ct46]|[A-Z*]{0,3}|TX[1I\]])\s*$/i;
 const ratePattern=/(\d+(?:[.,]\d{1,3})?)\s*(?:kg|lbs?|g|ml|l|each|pcs?)?\s*@\s*\$?\s*(\d+[.,]\d{2})(?:\s*(?:per\s*(?:1\s*)?(?:kg|lbs?|g|ml|l)|\/(?:kg|lbs?|g|ml|l)|ea\.?))?\s*$/i;
 const priorRatePattern=/(\d+(?:[.,]\d{1,3})?)\s*(?:kg|lbs?|g|ml|l|each|pcs?)?\s*@\s*\$?\s*(\d+[.,]\d{2})\s*$/i;
 const moneyValue=s=>{const m=String(s).match(/\d+[.,]\d{2}/);return m?Math.round(Number(m[0].replace(',','.'))*100):null};
@@ -21,6 +24,18 @@ export function assembleSpatial(record,{threshold=1.5,margin=0.25}={}){
  validRecord(record);if(!(threshold>0)||!Number.isFinite(threshold)||margin<0||!Number.isFinite(margin))throw Error('Invalid spatial thresholds');
  const boxes=record.texts.map((text,i)=>normBox(i,text,record.boxes[i],record.scores[i]));
  const fragments=new Set(boxes.filter(b=>/^\d{1,3}$/.test(b.text.trim())).map(b=>b.index));
+ // Some receipts print both a unit price and the line total in numeric
+ // columns. The wider right column is the purchase amount. Require a clear
+ // gap and several amounts there before excluding the left numeric column.
+ const numeric=boxes.filter(b=>b.money).map(b=>b.x).sort((a,b)=>a-b);
+ const gaps=numeric.slice(1).map((x,i)=>({gap:x-numeric[i],index:i})).sort((a,b)=>b.gap-a.gap);
+ const largest=gaps[0],medianHeight=median(boxes.map(b=>b.h));
+ const priceColumn=largest&&largest.gap>3*medianHeight&&largest.index>=1&&numeric.length-largest.index-1>=5?(numeric[largest.index]+numeric[largest.index+1])/2:null;
+ if(priceColumn!==null)for(const box of boxes)if(box.money&&box.x<priceColumn)box.money=false;
+ // Document-level baseline is more stable than the slope of a short amount
+ // box when the photo is tilted or warped. It never changes literal OCR text.
+ const baseline=Number.isFinite(record.baseline_slope)&&Math.abs(record.baseline_slope)<1?record.baseline_slope:null;
+ if(baseline!==null)for(const box of boxes)box.slope=baseline;
  const anchors=boxes.filter(b=>!b.money&&!fragments.has(b.index)&&Math.abs(b.slope)<1),prices=boxes.filter(b=>b.money);
  if(!anchors.length)return {lines:boxes.map(b=>b.text),observations:[],unmatched:prices.map(b=>b.index),ambiguous:[],assignments:[]};
  const xref=median(anchors.map(a=>a.x-a.width/2)),rows=[];
@@ -37,6 +52,9 @@ export function assembleSpatial(record,{threshold=1.5,margin=0.25}={}){
  const n=kept.length,m=prices.length,weights=Array.from({length:n},()=>Array(m).fill(null)),distances=Array.from({length:n},()=>Array(m).fill(null));
  for(let i=0;i<n;i++){
   const row=kept[i],a=row.rep,text=label(row),rate=text.match(ratePattern),preceding=i?label(kept[i-1]):'',prior=preceding.match(priorRatePattern);
+  // A left-column unit price is evidence for a count, never the product that
+  // owns a right-column line total on a nearby row.
+  if(pricePattern.test(text))continue;
   const rateTotal=rate?Math.round(Number(rate[1].replace(',','.'))*moneyValue(rate[2])):null;
   const priorTotal=prior?Math.round(Number(prior[1].replace(',','.'))*moneyValue(prior[2])):null;
   const hasAmount=/\d+[.,]\d{2}\s*[A-Z*]{0,3}$/.test(text)&&!text.includes('@');
@@ -78,7 +96,7 @@ export function assembleSpatial(record,{threshold=1.5,margin=0.25}={}){
  }
  for(const id of [...unmatched,...ambiguous,...[...fragments].sort((a,b)=>a-b)]){const b=boxes[id];output.push([projected(b,xref,coarse),b.text,{text:b.text,unassigned:true,box:id}]);}
  output.sort((a,b)=>a[0]-b[0]||a[1].localeCompare(b[1]));
- return {lines:output.map(x=>x[1]),observations:output.map(x=>x[2]),unmatched,ambiguous,assignments,xref,ignored_identifier_boxes:ignored,numeric_fragments:[...fragments].sort((a,b)=>a-b)};
+ return {lines:output.map(x=>x[1]),observations:output.map(x=>x[2]),unmatched,ambiguous,assignments,xref,price_column:priceColumn,ignored_identifier_boxes:ignored,numeric_fragments:[...fragments].sort((a,b)=>a-b)};
 }
 
 // Only attach an orphan printed amount to a nearby product when the printed

@@ -70,6 +70,18 @@ test('French section headings are whole lines; similar product names stay produc
  ]);
 });
 
+test('French OCR euro glyph repairs keep exact transcript and separate vegetarian pasta from meat',()=>{
+ const lines=['SAMPLE MARCHE','FRUITS ET LEGUMES','TEST TOMATES 2,50 ( 11','LIQUIDES','TEST JUS 7,26 6 11','3 X 2,42 (','CHARC.TRAIT.SAUC.SECS L','TEST JAMBON 4,00 € 11','TORTELLINI RICOTT.EPINA.U 300G 2,23 ( 11','TOTAL 6 Article(s) 16, - €','RESTE A PAYER 16, - €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-damaged-euro.jpg'},{ai:true});
+ assert.equal(doc.ocr.text,lines.join('\n'));
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.packCount,row.section,Boolean(row.excludedFromPantry)]),[
+  ['TEST TOMATES','2.50',1,'kitchen',false],
+  ['TEST JUS','7.26',3,'kitchen',false],
+  ['TEST JAMBON','4.00',1,'',true],
+  ['TORTELLINI RICOTT.EPINA.U','2.23',1,'kitchen',false],
+ ]);
+});
+
 test('an OCR-damaged pack size cannot masquerade as a known one-piece stock quantity',()=>{
  const rows=parseReceipt('TEST RIZ IKG 3,18 € 5\n1 X 3,18 EUR\nTEST PASTA S00G 1,06 € 5\nTEST YOGURT 8X1256 3,50 € 5\nTOTAL 7,74 €');
  assert.equal(rows.length,3);
