@@ -411,6 +411,19 @@ test('a printed per-one-unit rate does not discard the actual purchased weight',
  assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
 });
 
+test('a one-digit OCR rate error before a discount retains the adjacent pack count for review',()=>{
+ const text='TEST DRINK 75CL 15,98 € 13\n2 X 7,93 UF\nREMISE SPECIAL -2.00\nTEST RICE 1KG 4,00 € 11\n1 X 4,00 EUR\nTOTAL [3] Articles\n17,98 €';
+ const rows=parseReceipt(text);
+ assert.equal(rows.length,2);
+ assert.deepEqual(rows.map(row=>[row.amount,row.packCount]),[['15.98',2],['4.00',1]]);
+ assert.equal(rows[0].unitPrice,'7.93');
+ assert.match(rows[0].warning,/does not match/);
+ assert.equal(auditReceipt(text,rows).packCount,3);
+ const distant=parseReceipt(text.replace('7,93','6,93'));
+ assert.equal(distant[0].packCount,1);
+ assert.match(distant[0].warning,/Stock was left unchanged/);
+});
+
 test('an interposed discount does not discard a uniquely matching pack quantity',()=>{
  for(const discount of ['-$1.14','Coupon -$1.14','$1.14-']){
   const rows=parseReceipt('TEST OATS 250G $9.51\n'+discount+'\n3 @ $3.17\nTEST PEARS $4.00\nSUBTOTAL $12.37');

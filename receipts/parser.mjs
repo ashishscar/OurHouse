@@ -271,6 +271,20 @@ export function parseReceipt(text){
    }
    if(beforeDiscount&&!pending&&!body.match(ratePattern)){finishRate(undefined,false);deferredRate={rate,line,previous:beforeDiscount,afterDiscount:true};beforeDiscount=null;continue;}
    beforeDiscount=null;
+   // A separate discount can follow a damaged count/rate line. Retain the
+   // adjacent printed count when the item total proves a one-digit OCR error
+   // in the unit price; keep that read price and require user review.
+   const printedCount=num(rate[1]),printedUnitCents=Math.round(num(rate[3])*100),
+    impliedUnitCents=last?.amount&&printedCount>1?Number(last.amount)*100/printedCount:NaN;
+   const rateDigits=String(printedUnitCents).padStart(3,'0'),impliedDigits=String(Math.round(impliedUnitCents)).padStart(3,'0');
+   const oneDigitError=Number.isInteger(impliedUnitCents)&&rateDigits.length===impliedDigits.length&&
+    [...rateDigits].filter((digit,index)=>digit!==impliedDigits[index]).length===1;
+   if(!pending&&!body.match(ratePattern)&&last?.raw.split('\n').at(-1).trim()===lines[lineIndex-1]&&
+    discountPrice(nextLine)&&oneDigitError&&Math.abs(printedCount*printedUnitCents-Number(last.amount)*100)<=Number(last.amount)*2){
+    applyRate(last,rate);last.raw+='\n'+line;
+    last.warning='The printed count is attached, but the OCR unit price does not match this product amount. Check the photo before selecting it.';
+    continue;
+   }
    if(!pending&&!body.match(ratePattern)&&(!last?.amount||Math.abs(Number(last.amount)-num(rate[1])*Number(amount(rate[3])))>.03)){finishRate(undefined,false);deferredRate={rate,line,previous:last};continue;}
    const repeated=!pending&&last?.unitPrice&&priced&&body.match(ratePattern),row=pending?(pendingDraft||{...quantity(pending),raw:pending}):repeated?{...quantity(last.name),itemNumber:last.itemNumber,raw:last.name}:last;
    if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+line;if(pending){if(row.amount&&validName(row.name))add(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
