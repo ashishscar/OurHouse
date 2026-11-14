@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('explicit piece packs use their printed count without changing purchased units',()=>{
+ const capsule=parseReceiptFields({label:'L OR ESPRESSO FORZA X30CAPS',amount:'8.99'});
+ const tablet=parseReceiptFields({label:'TAB.L-VAISS.FINISH QUANTUM X68',amount:'9.99'});
+ const hangers=parseReceiptFields({label:'CINTRE U ECO PLAST.X5',amount:'4.99'});
+ assert.deepEqual([capsule.qty,capsule.unit,capsule.packCount,capsule.quantityKnown],[30,'pcs',1,true]);
+ assert.deepEqual([tablet.qty,tablet.unit,tablet.packCount,tablet.quantityKnown],[68,'pcs',1,true]);
+ assert.deepEqual([hangers.qty,hangers.unit,hangers.packCount,hangers.quantityKnown],[5,'pcs',1,true]);
+ const doubled=parseReceipt('TAB.L-VAISS.FINISH QUANTUM X68 19.98 €\n2 X 9.99 €');
+ assert.deepEqual(doubled.map(row=>[row.qty,row.unit,row.packCount,row.amount]),[[136,'pcs',2,'19.98']]);
+ const unknown=parseReceiptFields({label:'LED LIGHT MODEL X30',amount:'8.99'});
+ assert.deepEqual([unknown.name,unknown.qty,unknown.quantityKnown],['LED LIGHT MODEL X30',1,false]);
+});
+
 test('a receipt deposit is a bill charge, not stock or an extra purchased item',()=>{
  const lines=['FRESHCO','Yog Drink Ayran $1.79 HC','Simply Chy Limeade $3.19 H','+Deposit $0.10','Cherries Red $6.16 C','0.935 kg @ $6.59 / kg','INSTANT SAVINGS','-$1.00','SUBTOTAL $10.24','3','NUMBER OF ITEMS'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-freshco.jpg'},{ai:true});

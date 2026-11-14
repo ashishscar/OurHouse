@@ -6,6 +6,7 @@ import {parseReceipt,auditReceipt} from '../receipts/parser.mjs';
 test('verified food types are pantry even when a receipt omits the word snack',()=>{
  for(const label of ['DP SPICY VEGGIE BURGERS','DP ORIGINAL KHARI','MUZDA MAKHANIA','BALAJI CRUNCHEM','BR 5050 SWEET&SALTY FAMILY','COKE DIET'])assert.equal(receiptSection(label),'kitchen',label);
  for(const label of ['BR 5050 FAMILY','UNKNOWN SWEET&SALTY FAMILY','COLDWTR CLEANER'])assert.notEqual(receiptSection(label),'kitchen',label);
+ assert.equal(receiptSection('TAB.L-VAISS.FINISH QUANTUM'),'household');
 });
 test('French fish and meat labels remain excluded while vegetarian labels can enter Pantry',()=>{
  const rows=[

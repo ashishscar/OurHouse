@@ -85,8 +85,15 @@ function quantity(body){
  const packageUnit=u=>/^(?:pk|packs?|packets?)$/i.test(u||'');
  let value={qty:count,unit:'pcs'};if(weight){value=packageUnit(weight[2])?{qty:count,unit:'packet'}:measured(num(weight[1])*count,weight[2]);name=name.replace(weight[0],' ').trim();known=true;}
  if(multi){value=packageUnit(multi[3])?{qty:count,unit:'packet'}:measured(num(multi[2])*count,multi[3]);name=name.replace(multi[0],' ').trim();}
+ // An explicit terminal piece count is stock evidence when it names a piece
+ // unit, or when the printed product type is a hanger or dishwasher tablet.
+ // Avoid treating arbitrary model numbers ending in X30 as a stock count.
+ const piecePack=!weight&&!multi?name.match(/(?:^|[\s.])X(\d{1,3})(?:\s*(CAPS?(?:ULES?)?|TABS?(?:LETS?|LETTES?)?|PCS?))?\s*$/i):null;
+ const pieceKind=/\b(?:CINTRES?|HANGERS?|DISHWASHER|TAB(?:LETS?|LETTES?)?)\b|\bTAB\.?L[-\s]?VAISS/i.test(name);
+ const pieces=piecePack&&(piecePack[2]||pieceKind)&&Number(piecePack[1])>=2&&Number(piecePack[1])<=200?Number(piecePack[1]):0;
+ if(pieces){value={qty:count*pieces,unit:'pcs'};name=name.slice(0,piecePack.index).trim();known=true;}
  name=stripDamagedItemCode(name).replace(/^\s*(?:\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/,'').replace(/[*#_]/g,' ').replace(/\.{2,}/g,' ').replace(/\s+/g,' ').trim().replace(/\s+(?:H?MRJ|RQ|HQ|W)\s*$/i,'');
- const row={name,...value,quantityKnown:known,packCount:multi?1:count,...(multi?{packSize:num(multi[2])*Number(multi[1]),packUnit:packageUnit(multi[3])?'pcs':multi[3].toLowerCase(),quantityDetail:multi[1]+' × '+multi[2]+' '+multi[3]}:weight?{packSize:num(weight[1]),packUnit:packageUnit(weight[2])?'pcs':weight[2].toLowerCase(),...(packageUnit(weight[2])?{quantityDetail:count+' '+(count===1?'pack':'packs')+' × '+weight[1]+' pieces'}:{})}:{}),...(itemNumber?{itemNumber}:{})};return inline?applyRate(row,inline):row;
+ const row={name,...value,quantityKnown:known,packCount:multi?1:count,...(multi?{packSize:num(multi[2])*Number(multi[1]),packUnit:packageUnit(multi[3])?'pcs':multi[3].toLowerCase(),quantityDetail:multi[1]+' × '+multi[2]+' '+multi[3]}:weight?{packSize:num(weight[1]),packUnit:packageUnit(weight[2])?'pcs':weight[2].toLowerCase(),...(packageUnit(weight[2])?{quantityDetail:count+' '+(count===1?'pack':'packs')+' × '+weight[1]+' pieces'}:{})}:pieces?{packSize:pieces,packUnit:'pcs',quantityDetail:count+' '+(count===1?'pack':'packs')+' × '+pieces+' pieces'}:{}),...(itemNumber?{itemNumber}:{})};return inline?applyRate(row,inline):row;
 }
 function validName(name,explicitPrice=false){const letters=name.replace(/(?<=\p{L})0(?=\p{L})/gu,'O');return name.length>=2&&name.length<=80&&/\p{L}{2}/u.test(letters)&&!/^(.)\1{5,}/u.test(name)&&!noise.test(name)&&!/(?:instant\s+savings|coupon|discount)\b/i.test(name)&&!/(?:[$₹£€]|\bRs\.?\s*\d)/i.test(name)&&(explicitPrice||!/\d+[.,]\d{2}(?:\s|$)/.test(name));}
 function applyRate(row,rate){
