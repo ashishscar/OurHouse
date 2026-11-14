@@ -542,15 +542,23 @@ test('implausibly large OCR package sizes require stock correction',()=>{
  assert.match(row.raw,/2504L/);
 });
 
-test('French weighed rate uses arithmetic and leaves a mismatched weight for review',()=>{
+test('French weighed rate repairs one OCR digit only when printed weight and total reconcile',()=>{
  const rows=parseReceipt('CHEESE 4.22 € 11\nPesée manuelle\n0.,302 kg X 13.99 (/kg\nTOMATO 5.47 € 11\nPes@e nanuelle\n1.371 kg X 3.93 t/kg\nTOTAL 9.69 €');
  assert.equal(rows.length,2);
  assert.equal(rows[0].qty,0.302);
  assert.equal(rows[0].unit,'kg');
  assert.equal(rows[0].amount,'4.22');
  assert.equal(rows[1].amount,'5.47');
- assert.equal(rows[1].quantityKnown,false);
- assert.match(rows[1].warning,/weight × unit price/);
+ assert.equal(rows[1].quantityKnown,true);
+ assert.equal(rows[1].qty,1.371);
+ assert.equal(rows[1].unit,'kg');
+ assert.equal(rows[1].unitPrice,'3.99');
+ assert.deepEqual(rows[1].rateCorrection,{read:'3.93',reconciled:'3.99'});
+ assert.match(rows[1].warning,/OCR unit price was reconciled/);
+ assert.match(rows[1].raw,/3\.93 t\/kg/);
+ const unresolved=parseReceipt('TOMATO 5.47 € 11\n1.371 kg X 2.33 t/kg\nTOTAL 5.47 €')[0];
+ assert.equal(unresolved.quantityKnown,false);
+ assert.match(unresolved.warning,/weight × unit price/);
 });
 
 test('damaged French departments stay separate from priced product labels',()=>{

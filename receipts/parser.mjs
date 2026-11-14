@@ -24,6 +24,20 @@ function repairReconciledRateGlyph(line,knownTotal=null){
  if(!total||Number(match[2])*Math.round(num(match[3])*100)!==Math.round(num(total)*100))return line;
  return match[1]+'$'+match[3]+line.slice(match[0].length);
 }
+function reconciledWeighedRate(readRate,weight,lineTotal){
+ // A blurred thermal digit may be repaired only when one and only one
+ // replacement cent-rate rounds the printed weight to the printed line total.
+ // Keep the original OCR line in raw so the user can inspect the correction.
+ const digits=String(readRate).replace(/[.,]/g,'');
+ if(!/^\d{3,6}$/.test(digits)||!Number.isFinite(weight)||weight<=0)return null;
+ const target=Math.round(Number(lineTotal)*100),candidates=new Set();
+ for(let i=0;i<digits.length;i++)for(let replacement=0;replacement<=9;replacement++){
+  if(String(replacement)===digits[i])continue;
+  const cents=Number(digits.slice(0,i)+replacement+digits.slice(i+1));
+  if(cents>0&&Math.round(weight*cents)===target)candidates.add(cents);
+ }
+ return candidates.size===1?(Array.from(candidates)[0]/100).toFixed(2):null;
+}
 function printedDepartment(line){
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|DELI|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)(?:\s+\$?0[.,]00)?\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
@@ -197,6 +211,8 @@ export function parseReceipt(text){
   if(weighedRate&&last){
    const count=num(weighedRate[1].replace(/[.,]{2}/,'.')),rate=num(weighedRate[3]),total=last.amount;
    if(Number.isFinite(count)&&Math.abs(count*rate-Number(total))<=.03){applyRate(last,[null,String(count),weighedRate[2],weighedRate[3]]);last.raw+='\n'+line;continue;}
+   const repaired=reconciledWeighedRate(weighedRate[3],count,total);
+   if(repaired){applyRate(last,[null,String(count),weighedRate[2],repaired]);last.raw+='\n'+line;last.rateCorrection={read:weighedRate[3],reconciled:repaired};last.warning='The OCR unit price was reconciled with the printed weight and item amount. Check the photo before selecting it.';continue;}
    last.warning='The printed weight × unit price does not match this product amount. Enter the stock weight from the photo before selecting it.';last.unmatchedQuantity=line;continue;
   }
   if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
