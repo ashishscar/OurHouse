@@ -76,6 +76,17 @@ test('French price tax codes and EUR quantity continuations retain each purchase
  assert.equal(doc.audit.packCount,3);
 });
 
+test('damaged euro rates and interposed VAT glyphs keep purchases and safe French departments',()=>{
+ const lines=['EXAMPLE MARKET','>> EPICERIE','PLAIN WRAPS 370G','2','2 X 1.004 2.00 2','» LIQUIDE','CIOREBRET BRUT 75CL 1.92 5','>» EMTRETIEN','GOMME NETTOYANTE 0.79 5','» CHARCUTERIE TRAITEUR LS','6GALET SARRASIN 300G 1.89 2','> CREMERIE FROMAGE LS','EMMENTAL 200G 1.94 2','DEUFS SOL 408G 1.49 2','>> PERMANENTS','PILES SPE CR2032 1P','2 X 1.994 3.98 5','Total 9 articles 14.01 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-french-ocr.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.amount,item.packCount,item.section,Boolean(item.excludedFromPantry)]),[
+  ['2.00',2,'kitchen',false],['1.92',1,'',true],['0.79',1,'household',false],['1.89',1,'',false],['1.94',1,'',false],['1.49',1,'kitchen',false],['3.98',2,'household',false]
+ ]);
+ assert.equal(doc.audit.netSum,'14.01');
+ assert.equal(doc.audit.packCount,9);
+ assert.deepEqual(doc.warnings,['Some products need review. Check the flagged items against the photo before adding them.']);
+});
+
 test('French section headings are whole lines; similar product names stay products',()=>{
  const rows=parseReceipt('EPICES\nTEST EPICES DOUCES 1,50 € 5\nTEST PATES AU RIZ 2,50 € 5\nTOTAL 4,00 €');
  assert.deepEqual(rows.map(row=>[row.name,row.amount]),[

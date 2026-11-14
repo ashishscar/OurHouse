@@ -8,7 +8,7 @@ const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|tot\.?\s*rounded|tax
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
-const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:1\s*/\s*)?(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?(?:\s+(?:H?MRJ|W|EUR|€|E?UF|E?UR|[≥:]UR|CUF))?\s*$`,'i');
+const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:1\s*/\s*)?(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*€)?(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?(?:\s+(?:H?MRJ|W|EUR|€|E?UF|E?UR|[≥:]UR|CUF))?\s*$`,'i');
 const bareDiscount=new RegExp(String.raw`^\s*(?:-\s*(?:${currency})?\s*\d+[.,]\d{2}|(?:${currency})?\s*\d+[.,]\d{2}\s*-)(?:\s*[A-Z*]{1,3})?\s*$`,'i');
 const num=s=>Number(String(s).replace(/\s/g,'').replace(',','.'));
 const rounded=n=>Math.round(n*1e6)/1e6;
@@ -39,6 +39,7 @@ function reconciledWeighedRate(readRate,weight,lineTotal){
  return candidates.size===1?(Array.from(candidates)[0]/100).toFixed(2):null;
 }
 function printedDepartment(line){
+ line=line.replace(/^[\s>»]+/,'').trim();
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|DELI|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)(?:\s+\$?0[.,]00)?\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
  if(splitPrice(line))return '';
@@ -46,6 +47,11 @@ function printedDepartment(line){
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
  const compact=line.toUpperCase().replace(/[^A-Z]/g,'');
+ if(/^E[NM]TRETIEN$/.test(compact))return 'household';
+ if(/^CHARCUTERIETRAITEURLS$/.test(compact))return 'exclude';
+ if(/^CREMERIEFROMAGELS$/.test(compact))return 'cheese-review';
+ if(/^LIQUIDE$/.test(compact))return 'kitchen';
+ if(/^PERMANENTS$/.test(compact))return 'unknown';
  const french=[['AIDESALACUISINE','kitchen'],['CONDIMENTSSAUCESFROIDES','kitchen'],['CONFITURESMIELPATARTINER','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['FROMAGECOUPEEMBALLE','kitchen'],['FRUITS','kitchen'],['LEGUMES','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen'],['CHAMPAGNESMOUSSEUX','exclude'],['VINSAOC','exclude'],['MOBILIER','household'],['PARFUMERIE','household'],['PRODUITSVAISSELLE','household']];
  const edits=(a,b)=>{let prior=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(a[i-1]!==b[j-1]));prior=next;}return prior[b.length];};
  for(const [heading,section] of french)if(compact===heading||heading.length>=6&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=(heading.length>=8?2:1))return section;
@@ -136,6 +142,11 @@ export function parseReceipt(text){
  const lines=source.split(/\r?\n/).map(x=>{
   const trimmed=x.replace(/\u00a0/g,' ').trim();
   let repaired=frenchEuro?trimmed.replace(/(\d+[.,]\d{2})\s*[ct(46](?=\s+(?:\d+[.,]\d{2}|1[13]\b))/gi,'$1 €').replace(/(\d+[.,]\d{2})\s*\($/,'$1 €'):trimmed;
+  // A third OCR glyph after a two-decimal unit price can be a damaged euro
+  // sign. Repair it only when count × the first two decimals exactly equals
+  // the independently printed line amount.
+  const rateGlyph=repaired.match(/^(\d{1,3})\s*([x×])\s*(\d+[.,]\d{2})([046ct(€])\s+(\d+[.,]\d{2})(\s+\S{1,3})?$/i);
+  if(rateGlyph&&Math.round(Number(rateGlyph[1])*num(rateGlyph[3])*100)===Math.round(num(rateGlyph[5])*100))repaired=`${rateGlyph[1]} ${rateGlyph[2]} ${rateGlyph[3]}€ ${rateGlyph[5]}${rateGlyph[6]||''}`;
   if(frenchEuro&&/^\d{1,3}\s*[x×]\s*\d+[.,]\d{2}\s*[ct(46]$/i.test(repaired))repaired=repaired.replace(/[ct(46]$/i,'€');
   return repairReconciledRateGlyph(repaired);
  }).filter(Boolean),rows=[];
@@ -157,6 +168,13 @@ export function parseReceipt(text){
  for(const [lineIndex,originalLine] of lines.entries()){
   let line=originalLine;
   if(consumed.has(lineIndex))continue;
+  // A one-character VAT code can sit between a product label and its
+  // priced count line. Keep the label only when the next line proves its
+  // own amount by exact count × unit-price arithmetic.
+  if(/^\d$/.test(line)&&pending){
+   const next=splitPrice(lines[lineIndex+1]||''),nextRate=next?.body.match(ratePattern);
+   if(nextRate&&Math.round(num(nextRate[1])*num(nextRate[3])*100)===Math.round(Number(next.amount)*100))continue;
+  }
   if(orphanPrice&&lineIndex>orphanPrice.lineIndex+1)orphanPrice=null;
   // Some tills print product-like loyalty labels followed by points and an
   // OCR-damaged subtotal. End purchases only for a real points footer: a
@@ -354,6 +372,6 @@ export function auditReceipt(text,items=pantryReceipt(text)){
  const netSum=rounded(itemSum+charges-discounts);
  if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
  if(footer.productCount&&packCount!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+packCount+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
- if(items.some(item=>item.warning))warnings.push('Some product quantities or package sizes need review. Check the flagged products against the photo.');
+ if(items.some(item=>item.warning))warnings.push('Some products need review. Check the flagged items against the photo before adding them.');
  return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...footer,warnings};
 }
