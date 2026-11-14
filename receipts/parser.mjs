@@ -118,7 +118,7 @@ export function parseReceipt(text){
  // French tills often append a VAT code after the euro sign. An OCR reader
  // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
  // glyphs on a receipt with independent French/euro footer evidence.
- const frenchEuro=/(?:Article\(s\)|REDUCTIONS INMEDIATES|RESTE A PAYER|SOUS-TOTAL)/i.test(source)&&source.includes('€');
+ const frenchEuro=/(?:Article\(s\)|TOTAL\s*\[\d{1,4}\]\s*Articles?\b|REDUCTIONS INMEDIATES|RESTE A PAYER|SOUS-TOTAL)/i.test(source)&&source.includes('€');
  const lines=source.split(/\r?\n/).map(x=>{
   const trimmed=x.replace(/\u00a0/g,' ').trim();
   let repaired=frenchEuro?trimmed.replace(/(\d+[.,]\d{2})\s*[ct(46](?=\s+(?:\d+[.,]\d{2}|1[13]\b))/gi,'$1 €').replace(/(\d+[.,]\d{2})\s*\($/,'$1 €'):trimmed;

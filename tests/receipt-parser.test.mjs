@@ -95,6 +95,16 @@ test('French OCR euro glyph repairs keep exact transcript and separate vegetaria
  ]);
 });
 
+test('a legible French item-count footer keeps euro repair when subtotal OCR is damaged',()=>{
+ const lines=['SAMPLE MARCHE','FRUITS','TEST TOMATES 2,50 ( 11','TEST RAISIN 1,00 6 11','TOTAL [2] Articles 3,50 €','SOUS-TUTAL 3,50 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-damaged-subtotal.jpg'},{ai:true});
+ assert.equal(doc.ocr.text,lines.join('\n'));
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount]),[['TEST TOMATES','2.50'],['TEST RAISIN','1.00']]);
+ assert.equal(doc.audit.productCount,2);
+ assert.equal(doc.audit.packCount,2);
+ assert.equal(doc.audit.netSum,'3.50');
+});
+
 test('an OCR-damaged pack size cannot masquerade as a known one-piece stock quantity',()=>{
  const rows=parseReceipt('TEST RIZ IKG 3,18 € 5\n1 X 3,18 EUR\nTEST PASTA S00G 1,06 € 5\nTEST YOGURT 8X1256 3,50 € 5\nTOTAL 7,74 €');
  assert.equal(rows.length,3);
