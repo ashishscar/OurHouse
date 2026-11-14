@@ -1,6 +1,321 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseReceipt,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
+import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
+import {documentFrom} from '../receipts/document.mjs';
+
+test('explicit piece packs use their printed count without changing purchased units',()=>{
+ const capsule=parseReceiptFields({label:'L OR ESPRESSO FORZA X30CAPS',amount:'8.99'});
+ const tablet=parseReceiptFields({label:'TAB.L-VAISS.FINISH QUANTUM X68',amount:'9.99'});
+ const hangers=parseReceiptFields({label:'CINTRE U ECO PLAST.X5',amount:'4.99'});
+ assert.deepEqual([capsule.qty,capsule.unit,capsule.packCount,capsule.quantityKnown],[30,'pcs',1,true]);
+ assert.deepEqual([tablet.qty,tablet.unit,tablet.packCount,tablet.quantityKnown],[68,'pcs',1,true]);
+ assert.deepEqual([hangers.qty,hangers.unit,hangers.packCount,hangers.quantityKnown],[5,'pcs',1,true]);
+ const doubled=parseReceipt('TAB.L-VAISS.FINISH QUANTUM X68 19.98 €\n2 X 9.99 €');
+ assert.deepEqual(doubled.map(row=>[row.qty,row.unit,row.packCount,row.amount]),[[136,'pcs',2,'19.98']]);
+ const unknown=parseReceiptFields({label:'LED LIGHT MODEL X30',amount:'8.99'});
+ assert.deepEqual([unknown.name,unknown.qty,unknown.quantityKnown],['LED LIGHT MODEL X30',1,false]);
+});
+
+test('a receipt deposit is a bill charge, not stock or an extra purchased item',()=>{
+ const lines=['FRESHCO','Yog Drink Ayran $1.79 HC','Simply Chy Limeade $3.19 H','+Deposit $0.10','Cherries Red $6.16 C','0.935 kg @ $6.59 / kg','INSTANT SAVINGS','-$1.00','SUBTOTAL $10.24','3','NUMBER OF ITEMS'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-freshco.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.qty,row.unit,row.section]),[
+  ['Yog Drink Ayran','1.79',1,'pcs','kitchen'],['Simply Chy Limeade','3.19',1,'pcs','kitchen'],['Cherries Red','6.16',0.935,'kg','kitchen']
+ ]);
+ assert.equal(doc.audit.itemSum,'11.14');
+ assert.equal(doc.audit.charges,'0.10');
+ assert.equal(doc.audit.discounts,'1.00');
+ assert.equal(doc.audit.netSum,'10.24');
+ assert.equal(doc.audit.productCount,3);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.audit.warnings,[]);
+ assert.equal(doc.ocr.text,lines.join('\n'));
+});
+
+test('a priced bottle deposit is a charge and a zero-dollar department heading is not stock',()=>{
+ const text='SAMPLE MARKET\nGROCERY $0.00\nSAMPLE SODA $13.99\nDEPOSIT 1 $0.60\nSUBTOTAL $14.59\nTAX $1.82\nTOTAL $16.41';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.department]),[['SAMPLE SODA','13.99','kitchen']]);
+ assert.equal(audit.charges,'0.60');assert.equal(audit.netSum,'14.59');assert.deepEqual(audit.warnings,[]);
+});
+
+test('bottle price with included deposits keeps its product, units and expense without pantry stock',()=>{
+ const lines=['SAMPLE LIQUOR STORE','SAMPLE WINE','90001234 01250ML DEP .10 ea.','(4 @ 5.00) 20.40','Total 20.40','Deposit (DEP) 0.40','Gift Card 10.00','Visa 10.40'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-bottle.jpg'},{ai:true});
+ assert.equal(doc.items.length,1);
+ assert.deepEqual(doc.items.map(({name,amount,qty,unit,packCount,includedDeposit,section})=>({name,amount,qty,unit,packCount,includedDeposit,section})),[
+  {name:'SAMPLE WINE',amount:'20.40',qty:5000,unit:'ml',packCount:4,includedDeposit:0.4,section:''}
+ ]);
+ assert.equal(doc.items[0].excludedFromPantry,true);
+ assert.equal(doc.audit.netSum,'20.40');
+ assert.deepEqual(doc.warnings,[]);
+ const verified=documentFrom([{lines:['LCB0','BABY DUCK','00001123 00750ML DEP .20 ea.','(2 @ 8.75) 17.90','Total 17.90'],native:true}],{name:'synthetic-verified-bottle.jpg'},{ai:true});
+ assert.equal(verified.items[0].name,'Baby Duck');
+ assert.equal(verified.items[0].excludedFromPantry,true);
+});
+
+test('a dated zero-value header is metadata, and possessive spelling may shorten a grounded food label',()=>{
+ const lines=['SAMPLE GROCERY','01/01/24 $0.00','PRODUCE','(SALE) WHITE POMELO W $1.50','(SALE) RED POMELO W $2.50','DELI','FF SHEPHERDS PURSE FILLING W $3.00','TOTAL $7.00','Item count: 3'];
+ const doc=documentFrom([{lines,native:true,labels:[{line:6,name:"Shepherd's purse filling",section:'pantry'}]}],{name:'synthetic-bilingual.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>row.name),['WHITE POMELO','RED POMELO',"Shepherd's purse filling"]);
+ assert.deepEqual(doc.items.map(row=>row.amount),['1.50','2.50','3.00']);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.warnings,[]);
+});
+
+test('French price tax codes and EUR quantity continuations retain each purchased line',()=>{
+ const lines=['SAMPLE MARCHE','AIDES A LA CUISINE','TEST BOUILLON LEGUMES € 1,22 5','1 X 1,22 EUR','CONSERVES DE POISSON','TEST THON 2,40 € 5','ULTRA FRAIS','TEST YAOURT 125G 3,00 € 5','TOTAL [3] Articles','SOUS-TOTAL 6,62 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-market.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.packCount,row.section]),[
+  ['TEST BOUILLON LEGUMES','1.22',1,'kitchen'],
+  ['TEST THON','2.40',1,''],
+  ['TEST YAOURT','3.00',1,'kitchen']
+ ]);
+ assert.equal(doc.items[1].excludedFromPantry,true);
+ assert.equal(doc.audit.productCount,3);
+ assert.equal(doc.audit.packCount,3);
+});
+
+test('damaged euro rates and interposed VAT glyphs keep purchases and safe French departments',()=>{
+ const lines=['EXAMPLE MARKET','>> EPICERIE','PLAIN WRAPS 370G','2','2 X 1.004 2.00 2','» LIQUIDE','CIOREBRET BRUT 75CL 1.92 5','>» EMTRETIEN','GOMME NETTOYANTE 0.79 5','» CHARCUTERIE TRAITEUR LS','6GALET SARRASIN 300G 1.89 2','> CREMERIE FROMAGE LS','EMMENTAL 200G 1.94 2','DEUFS SOL 408G 1.49 2','>> PERMANENTS','PILES SPE CR2032 1P','2 X 1.994 3.98 5','Total 9 articles 14.01 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-french-ocr.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.amount,item.packCount,item.section,Boolean(item.excludedFromPantry)]),[
+  ['2.00',2,'kitchen',false],['1.92',1,'',true],['0.79',1,'household',false],['1.89',1,'',false],['1.94',1,'',false],['1.49',1,'kitchen',false],['3.98',2,'household',false]
+ ]);
+ assert.equal(doc.audit.netSum,'14.01');
+ assert.equal(doc.audit.packCount,9);
+ assert.deepEqual(doc.warnings,['Some products need review. Check the flagged items against the photo before adding them.']);
+});
+
+test('French section headings are whole lines; similar product names stay products',()=>{
+ const rows=parseReceipt('EPICES\nTEST EPICES DOUCES 1,50 € 5\nTEST PATES AU RIZ 2,50 € 5\nTOTAL 4,00 €');
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[
+  ['TEST EPICES DOUCES','1.50'],['TEST PATES AU RIZ','2.50']
+ ]);
+});
+
+test('French OCR euro glyph repairs keep exact transcript and separate vegetarian pasta from meat',()=>{
+ const lines=['SAMPLE MARCHE','FRUITS ET LEGUMES','TEST TOMATES 2,50 ( 11','LIQUIDES','TEST JUS 7,26 6 11','3 X 2,42 (','CHARC.TRAIT.SAUC.SECS L','TEST JAMBON 4,00 € 11','TORTELLINI RICOTT.EPINA.U 300G 2,23 ( 11','TOTAL 6 Article(s) 16, - €','RESTE A PAYER 16, - €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-damaged-euro.jpg'},{ai:true});
+ assert.equal(doc.ocr.text,lines.join('\n'));
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.packCount,row.section,Boolean(row.excludedFromPantry)]),[
+  ['TEST TOMATES','2.50',1,'kitchen',false],
+  ['TEST JUS','7.26',3,'kitchen',false],
+  ['TEST JAMBON','4.00',1,'',true],
+  ['TORTELLINI RICOTT.EPINA.U','2.23',1,'kitchen',false],
+ ]);
+});
+
+test('a legible French item-count footer keeps euro repair when subtotal OCR is damaged',()=>{
+ const lines=['SAMPLE MARCHE','FRUITS','TEST TOMATES 2,50 ( 11','TEST RAISIN 1,00 6 11','TOTAL [2] Articles 3,50 €','SOUS-TUTAL 3,50 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-damaged-subtotal.jpg'},{ai:true});
+ assert.equal(doc.ocr.text,lines.join('\n'));
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount]),[['TEST TOMATES','2.50'],['TEST RAISIN','1.00']]);
+ assert.equal(doc.audit.productCount,2);
+ assert.equal(doc.audit.packCount,2);
+ assert.equal(doc.audit.netSum,'3.50');
+});
+
+test('an OCR-damaged pack size cannot masquerade as a known one-piece stock quantity',()=>{
+ const rows=parseReceipt('TEST RIZ IKG 3,18 € 5\n1 X 3,18 EUR\nTEST PASTA S00G 1,06 € 5\nTEST YOGURT 8X1256 3,50 € 5\nTOTAL 7,74 €');
+ assert.equal(rows.length,3);
+ for(const row of rows){assert.equal(row.quantityKnown,false);assert.match(row.warning,/package size may have been misread/);}
+});
+
+test('bilingual receipt annotations and multi-buy lines keep every separate purchase',()=>{
+ const text=['SAMPLE MARKET','GROCERY $0.00','SAMPLE WASABI $6.59','示例山葵 90G','SAMPLE SPICE $2.99','示例香料','(SALE) SAMPLE MUSTARD STEM','191509 3 @3/$6.97 W $6.97','示例芥菜','(SALE) SAMPLE NOODLES $4.49','示例麵','DELI','SAMPLE SOY DRINK','2 @ $2.99ea. W $5.98','示例豆漿','TOTAL $27.02'].join('\n');
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.qty,row.unit]),[
+  ['SAMPLE WASABI','6.59',1,'pcs'],['SAMPLE SPICE','2.99',1,'pcs'],['SAMPLE MUSTARD STEM','6.97',3,'pcs'],['SAMPLE NOODLES','4.49',1,'pcs'],['SAMPLE SOY DRINK','5.98',2,'pcs']
+ ]);
+ assert.equal(rows[2].itemNumber,'191509');assert.equal(rows[2].quantityKnown,true);
+ assert.match(rows[0].raw,/示例山葵/);assert.match(rows[2].raw,/示例芥菜/);
+ assert.equal(audit.netSum,'27.02');assert.deepEqual(audit.warnings,[]);
+ // A Chinese-only product followed by a separate price must not be swallowed
+ // as a translation of the preceding purchase.
+ const separate=parseReceipt('SAMPLE RICE $2.00\n示例豆腐\n$3.00\nTOTAL $5.00');
+ assert.equal(separate.length,2);assert.equal(separate[1].amount,'3.00');
+});
+
+test('Costco item codes, OCR O/0, discounts and product types survive a whole receipt',()=>{
+ const lines=[
+  'OSTCO WHOLESALE',
+  '430 XL EGGS 9.00',
+  '1346909 KS ORG 2% 4L 10.00',
+  '2919781 Z0A 25.00 H',
+  '2064222 TPD/2919781 4.00- H',
+  '2908438 BIOSTEEL 30.00 H',
+  'SUBTOTAL 70.00',
+  'TOTAL 72.00',
+  'TOTAL NUMBER OF ITEMS SOLD = 4',
+  'TOTAL DISCOUNT(S) $4.00',
+ ];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-costco', {ai:true});
+ assert.deepEqual(doc.items.map(({name,qty,unit,section,itemNumber})=>({name,qty,unit,section,itemNumber})),[
+  {name:'XL EGGS',qty:1,unit:'pcs',section:'kitchen',itemNumber:'430'},
+  {name:'Organic milk 2%',qty:4,unit:'L',section:'kitchen',itemNumber:'1346909'},
+  {name:'Energy drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2919781'},
+  {name:'Sports drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2908438'},
+ ]);
+ assert.deepEqual(doc.items.map(item=>item.amount),['9.00','10.00','25.00','30.00']);
+ assert.equal(doc.items[2].receiptName,'Z0A');
+ assert.equal(doc.audit.packCount,4);
+ assert.equal(doc.audit.netSum,'70.00');
+ assert.equal(doc.audit.total,'72.00');
+ assert.deepEqual(doc.warnings,[]);
+});
+
+test('a priced count line before its label belongs to the following purchase',()=>{
+ const lines=['STCC','VHOLESALE','***START OF PRE-SCANNED ITEMS***','1346909 KS ORG 2% 4L 10.29','2 @ 9.69 19.38','430 XL EGGS','***END OF PRE-SCANNED ITEMS***','TOTAL NUMBER OF PRE-SCANNED ITEMS= 3','SUBTOTAL 29.67'];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-forward-rate', {ai:true});
+ assert.deepEqual(doc.items.map(({name,amount,qty,unit,section})=>({name,amount,qty,unit,section})),[
+  {name:'Organic milk 2%',amount:'10.29',qty:4,unit:'L',section:'kitchen'},
+  {name:'XL EGGS',amount:'19.38',qty:2,unit:'pcs',section:'kitchen'},
+ ]);
+ assert.equal(doc.audit.packCount,3);
+ assert.deepEqual(doc.warnings,[]);
+});
+
+test('a grocery savings footer cannot become products or erase pack rates',()=>{
+ const lines=['FRESHCO','Tomatos Diced No Slt $11.94 C','6 @ 1/ $1.99','YOU SAVED $4.20','Milk 2% 1X4L $12.88 C','2 @ 1/ $6.44','YOUR DISCOUNT $1.35','Vinegar $1.69 C','INSTANT SAVINGS -$2.00','CocaCola Zero Can $25.96×HC','2 @ $12.98','YOU PRICE MATCHED & SAVED $6.02','SUBTOTAL $49.12','TOTAL $50.00'];
+ const doc=documentFrom([{lines,native:true}], 'synthetic-grocery-savings', {ai:true});
+ assert.deepEqual(doc.items.map(({amount,qty,unit,section})=>({amount,qty,unit,section})),[
+  {amount:'11.94',qty:6,unit:'pcs',section:'kitchen'},
+  {amount:'12.88',qty:8,unit:'L',section:'kitchen'},
+  {amount:'1.69',qty:1,unit:'pcs',section:'kitchen'},
+  {amount:'25.96',qty:2,unit:'pcs',section:'kitchen'},
+ ]);
+ assert.equal(doc.audit.discounts,'3.35');
+ assert.equal(doc.audit.netSum,'49.12');
+ assert.deepEqual(doc.warnings,[]);
+});
+
+test('hyphenated stock numbers stay separate from names and measurements',()=>{
+ const rows=parseReceipt('527-8910-2 TEST STORAGE BOX $7.25\n3 638-1029-4 TEST TOWEL $9.00');
+ assert.deepEqual(rows.map(({name,itemNumber,qty,unit,amount})=>({name,itemNumber,qty,unit,amount})),[
+  {name:'TEST STORAGE BOX',itemNumber:'527-8910-2',qty:1,unit:'pcs',amount:'7.25'},
+  {name:'TEST TOWEL',itemNumber:'638-1029-4',qty:3,unit:'pcs',amount:'9.00'},
+ ]);
+ const other=parseReceipt('2026-10-24 TEST NOTE $1.00\n555-010-1234 TEST CONTACT $2.00');
+ assert.equal(other[0].itemNumber,undefined);assert.ok(other[0].name.startsWith('2026-10-24'));
+ assert.equal(other[1].itemNumber,undefined);assert.ok(other[1].name.startsWith('555-010-1234'));
+});
+
+test('a numeric item code before PC is not a billion-piece package',()=>{
+ const row=parseReceiptFields({label:'06038389781 PC GIGANTICO BUN MRJ',amount:'12.00',quantityLine:'4 @ $3.00 MRJ'});
+ assert.equal(row.name,'PC GIGANTICO BUN');
+ assert.equal(row.itemNumber,'06038389781');
+ assert.equal(row.qty,4);
+ assert.equal(row.unit,'pcs');
+ assert.equal(row.packSize,undefined);
+ assert.equal(row.warning,undefined);
+});
+
+test('a terminal OCR dot after a price does not merge adjacent purchases',()=>{
+ const rows=parseReceipt('4032 WMELON RED SDLS MRJ 3.44.\n(2)4090 SPINACH BUNCHED MRJ\n2 @ $2.79 5.58\nSUBTOTAL 9.02');
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'WMELON RED SDLS',amount:'3.44',qty:1},
+  {name:'SPINACH BUNCHED',amount:'5.58',qty:2},
+ ]);
+ const offers=parseReceipt("TEST YOGURT 5.99\nIn-Sture Offers 500 Pts\n(3)18275700051 BRAR'S MALAI PAN MRJ\n3 @ $6.29 18.87\nSUBTOTAL 24.86");
+ assert.deepEqual(offers.map(({name,amount})=>({name,amount})),[
+  {name:'TEST YOGURT',amount:'5.99'},
+  {name:"BRAR'S MALAI PAN",amount:'18.87'},
+ ]);
+});
+
+test('OCR letter O inside a printed metric pack size can be read as zero',()=>{
+ const rows=parseReceipt('MTR RICE IDLI MIX 50OGM 13.16\n4 @ $3.29\nSESAME SEED BROWN 80OGM 5.49\nSESAME SEED BROWN 8O0GM 5.49\nCROWN 20OZ OATS 4.99');
+ assert.deepEqual(rows.map(({name,qty,unit})=>({name,qty,unit})),[
+  {name:'MTR RICE IDLI MIX',qty:2000,unit:'g'},
+  {name:'SESAME SEED BROWN',qty:800,unit:'g'},
+  {name:'SESAME SEED BROWN',qty:800,unit:'g'},
+  {name:'CROWN OATS',qty:566.990463,unit:'g'},
+ ]);
+ assert.match(rows[0].raw,/50OGM/);
+});
+
+test('a single OCR-damaged tax marker after a printed price retains the purchase',()=>{
+ const rows=parseReceipt('3458556 TIDE COLDWTR 27.99 H\n3458556 TIDE COLDWTR 27.99 工\nSUBTOTAL 55.98');
+ assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[
+  {name:'TIDE COLDWTR',amount:'27.99'},
+  {name:'TIDE COLDWTR',amount:'27.99'},
+ ]);
+ assert.match(rows[1].raw,/27\.99 工/);
+});
+
+test('OCR-damaged numeric item codes do not become product names',()=>{
+ const rows=parseReceiptFields({label:'057379(501 TEST WATERS',amount:'4.75'});
+ assert.equal(rows.name,'TEST WATERS');assert.equal(rows.raw,'057379(501 TEST WATERS $4.75');
+ const lines=parseReceipt('0603838:100 TEST CORN $4.99\n252411V TEST PEPPER $10.99\n*4087 TEST TOMATO $3.00');
+ assert.deepEqual(lines.map(r=>r.name),['TEST CORN','TEST PEPPER','TEST TOMATO']);
+ assert.equal(parseReceipt('(2)0333#367101 TEST CUCUMBER $2.58')[0].name,'TEST CUCUMBER');
+ assert.equal(parseReceipt('2026-10-24 TEST NOTE $1.00')[0].name,'2026-10-24 TEST NOTE');
+ assert.equal(parseReceipt('7UP TEST SODA $2.00')[0].name,'7UP TEST SODA');
+ const slash=parseReceipt('98765432/123 TEST OATS $3.99\nTOTAL $3.99')[0];
+ assert.equal(slash.name,'TEST OATS');
+ assert.equal(slash.itemNumber,'98765432/123');
+ assert.equal(slash.amount,'3.99');
+ assert.equal(slash.raw,'98765432/123 TEST OATS $3.99');
+ assert.equal(parseReceipt('2026/10/24 TEST NOTE $1.00')[0].name,'2026/10/24 TEST NOTE');
+});
+
+test('a digit-damaged department heading stays separate from the next priced product',()=>{
+ const text='21-6ROCERY\n03904700115 TEST SHORTBREAD $5.49\n0333836!162 TEST ROMAINE $4.99\n41-HOME\n123456 TEST SOAP $2.49\nSUBTOTAL $12.97';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,department})=>({name,amount,department})),[
+  {name:'TEST SHORTBREAD',amount:'5.49',department:'kitchen'},
+  {name:'TEST ROMAINE',amount:'4.99',department:'kitchen'},
+  {name:'TEST SOAP',amount:'2.49',department:'household'},
+ ]);
+ assert.equal(rows[1].raw,'0333836!162 TEST ROMAINE $4.99');
+});
+
+test('repeated OCR decoration cannot merge a basket heading into the first priced product',()=>{
+ const rows=parseReceipt('哈哈哈哈哈哈 BASKET HEADER\n1234567 TEST OATS $4.25\n1234568 TEST RICE $5.50\nTOTAL $9.75');
+ assert.deepEqual(rows.map(({name,amount})=>({name,amount})),[
+  {name:'TEST OATS',amount:'4.25'},
+  {name:'TEST RICE',amount:'5.50'},
+ ]);
+});
+
+test('a currency glyph read as s is repaired only when quantity and line total reconcile',()=>{
+ const rows=parseReceipt('TEST MALAI PAN\n3 @ s6.29 18.87\nTEST YOGURT 5.99\nTOTAL 24.86');
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'TEST MALAI PAN',amount:'18.87',qty:3},
+  {name:'TEST YOGURT',amount:'5.99',qty:1},
+ ]);
+ const structured=parseReceiptFields({label:'TEST MALAI PAN',amount:'18.87',quantityLine:'3 @ s6.29'});
+ assert.equal(structured.qty,3);
+ assert.equal(structured.unitPrice,'6.29');
+ assert.equal(structured.warning,undefined);
+ const mismatch=parseReceiptFields({label:'TEST MALAI PAN',amount:'17.87',quantityLine:'3 @ s6.29'});
+ assert.equal(mismatch.qty,1);
+ assert.match(mismatch.warning,/not understood/);
+ assert.deepEqual(parseReceipt('TEST MALAI PAN\n3 @ s6.29 17.87\nTEST YOGURT 5.99').map(row=>row.name),['TEST YOGURT']);
+});
+
+test('a printed POS marker after the unit price does not hide purchased quantity',()=>{
+ const row=parseReceiptFields({label:'SPINACH BUNCHED',amount:'5.58',quantityLine:'2 @ $2.79 MRJ'});
+ assert.equal(row.qty,2);assert.equal(row.unit,'pcs');assert.equal(row.unitPrice,'2.79');assert.equal(row.warning,undefined);
+ assert.match(row.raw,/2 @ \$2\.79 MRJ/);
+ assert.deepEqual(parseReceipt('SPINACH BUNCHED 5.58\n2 @ $2.79 MRJ\nTOTAL 5.58').map(item=>[item.name,item.qty,item.amount]),[['SPINACH BUNCHED',2,'5.58']]);
+ const unknown=parseReceiptFields({label:'SPINACH BUNCHED',amount:'5.58',quantityLine:'2 @ $2.79 EXTRA'});
+ assert.equal(unknown.qty,1);assert.match(unknown.warning,/not understood/);
+});
+
+test('a wrapped package size below the current priced product adds stock without changing price',()=>{
+ const rows=parseReceipt('TEST CRACKERS $3.49\n400G\nTEST OATS $6.00\n3 @ $2.00\n250GM\nTOTAL $9.49');
+ assert.deepEqual(rows.map(({name,qty,unit,packCount,amount})=>({name,qty,unit,packCount,amount})),[
+  {name:'TEST CRACKERS',qty:400,unit:'g',packCount:1,amount:'3.49'},
+  {name:'TEST OATS',qty:750,unit:'g',packCount:3,amount:'6.00'},
+ ]);
+ assert.equal(rows[0].raw,'TEST CRACKERS $3.49\n400G');
+ const conflict=parseReceipt('TEST MILK 2L $6.00\n1L')[0];
+ assert.equal(conflict.qty,2);assert.equal(conflict.unit,'L');assert.match(conflict.warning,/conflicts/);assert.equal(conflict.unmatchedQuantity,'1L');
+ const separated=parseReceipt('TEST SOAP $2.00\nDiscount -$0.25\n400G\nTEST PEARS $3.00');
+ assert.equal(separated[0].qty,1);assert.equal(separated[1].qty,1);
+});
 
 test('receipt prices and tax flags never become product names or pantry quantities',()=>{
  const rows=pantryReceipt('FAMILY MARKET\n123 Main Street\n123456 MILK 2L    $5.99 F\nBASMATI RICE 5 kg  18.49H\nBREAD 3.49 A\nSUBTOTAL 27.97\nHST 1.20\nTOTAL 29.17\nVISA 29.17\nTHANK YOU');
@@ -9,6 +324,9 @@ test('receipt prices and tax flags never become product names or pantry quantiti
   {name:'BASMATI RICE',qty:5,unit:'kg',amount:'18.49',quantityKnown:true,pick:false},
   {name:'BREAD',qty:1,unit:'pcs',amount:'3.49',quantityKnown:false,pick:false},
  ]);
+ const reversedTax=parseReceipt('TEST SOAP $2.00\n13% HST $0.26\nTOTAL $2.26');
+ assert.deepEqual(reversedTax.map(({name,amount})=>({name,amount})),[{name:'TEST SOAP',amount:'2.00'}]);
+ assert.equal(parseReceipt('SOUR CREAM 13% $4.00')[0].name,'SOUR CREAM 13%');
 });
 test('counts, weights, decimal commas and currency-prefixed whole prices are distinct fields',()=>{
  const rows=parseReceipt('2 x YOGURT 500g 4.98\nAPPLES 3 @ 0.99 2.97 T\nTOMATOES 0.742 kg @ 2.99/kg 2.22 F\nTOFU 400 g €3,49\nLENTILS 1kg ₹120\nRICE 5 kg Rs. 450.00');
@@ -39,6 +357,32 @@ test('wrapped product names retain the full flavour, size and leading fat qualif
  assert.equal(rows[1].name,'TEST BRAND SPICY VEGGIE BURGERS');
  assert.equal(rows[1].qty,400);
  assert.equal(rows[2].name,'35% TEST BRAND WHIPPING CREAM');
+});
+test('wrapped repeated products keep every price and do not absorb the receipt heading',()=>{
+ const text='FAMILY MARKET\n123 Main Street\n35%\n$8.99\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx1\nTEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]\nTEST SPICY SNACK\nTEST CHEVDO\n13 @ $1.69ea. $21.97 Tx1\nSUBTOTAL $43.33\nTOTAL $43.33';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),[
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'1.69',qty:1},
+  {name:'TEST SPICY SNACK TEST CHEVDO',amount:'21.97',qty:13},
+ ]);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ assert.equal(rows[3].raw,'TEST SPICY SNACK\nTEST CHEVDO $1.69 Tx]');
+ const incomplete=parseReceipt('35%\n$8.99\nTEST MILK $5.00\nTOTAL $13.99');
+ assert.deepEqual(incomplete.map(({name,amount})=>({name,amount})),[{name:'TEST MILK',amount:'5.00'}]);
+});
+
+test('tilted OCR price-first percent rows keep each independent purchase',()=>{
+ const text='$8.99\n35%\nTEST WHIPPING CREAM\n$8.99\n35%\nTEST WHIPPING CREAM\n35%\nTEST WHIPPING CREAM $8.99\nSUBTOTAL $26.97';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount,qty})=>({name,amount,qty})),Array(3).fill({name:'35% TEST WHIPPING CREAM',amount:'8.99',qty:1}));
+ assert.equal(rows[0].raw,'35%\n$8.99\nTEST WHIPPING CREAM');
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ const interrupted=parseReceipt('$8.99\n35%\nSUBTOTAL $8.99\nTEST WHIPPING CREAM $8.99');
+ assert.equal(interrupted.length,1);
+ assert.equal(interrupted[0].name,'TEST WHIPPING CREAM');
 });
 
 test('a leading count belongs to the next product only when its printed amount supports it',()=>{
@@ -78,6 +422,19 @@ test('a printed per-one-unit rate does not discard the actual purchased weight',
  assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
 });
 
+test('a one-digit OCR rate error before a discount retains the adjacent pack count for review',()=>{
+ const text='TEST DRINK 75CL 15,98 € 13\n2 X 7,93 UF\nREMISE SPECIAL -2.00\nTEST RICE 1KG 4,00 € 11\n1 X 4,00 EUR\nTOTAL [3] Articles\n17,98 €';
+ const rows=parseReceipt(text);
+ assert.equal(rows.length,2);
+ assert.deepEqual(rows.map(row=>[row.amount,row.packCount]),[['15.98',2],['4.00',1]]);
+ assert.equal(rows[0].unitPrice,'7.93');
+ assert.match(rows[0].warning,/does not match/);
+ assert.equal(auditReceipt(text,rows).packCount,3);
+ const distant=parseReceipt(text.replace('7,93','6,93'));
+ assert.equal(distant[0].packCount,1);
+ assert.match(distant[0].warning,/Stock was left unchanged/);
+});
+
 test('an interposed discount does not discard a uniquely matching pack quantity',()=>{
  for(const discount of ['-$1.14','Coupon -$1.14','$1.14-']){
   const rows=parseReceipt('TEST OATS 250G $9.51\n'+discount+'\n3 @ $3.17\nTEST PEARS $4.00\nSUBTOTAL $12.37');
@@ -114,4 +471,114 @@ test('a partial basket count never replaces the whole receipt count',()=>{
  assert.equal(whole.partialBasketCount,1);assert.equal(whole.productCount,2);assert.deepEqual(whole.warnings,[]);
  const missing=auditReceipt(text+'\nNumber of items: 3');
  assert.match(missing.warnings[0],/3 purchased units/);
+});
+
+test('a standalone gift card activation notice cannot join the next purchase',()=>{
+ const text='SAMPLE STORE\nLCBO CARD $400.00\nACTIVATED\n2773717 MONSTER VRTY $44.99\nSUBTOTAL $444.99';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(({name,amount})=>[name,amount]),[['LCBO CARD','400.00'],['MONSTER VRTY','44.99']]);
+ assert.deepEqual(auditReceipt(text,rows).warnings,[]);
+ const product=parseReceipt('ACTIVATED CHARCOAL $3.99\nSUBTOTAL $3.99');
+ assert.equal(product[0].name,'ACTIVATED CHARCOAL');
+});
+
+test('a positive OCR amount on an instant savings line still reduces the basket subtotal',()=>{
+ const text='BATH TISSUE $17.99\nINSTANT SAVINGS $6.00\nYOU SAVED $2.00\nSOFT DRINK $17.98\n-$2.00\nINSTANT SAVINGS\nSPRITE ZERO $53.94\nINSTANT SAVINGS\n-$6.00\nSUBTOTAL $75.91';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(({name,amount})=>[name,amount]),[['BATH TISSUE','17.99'],['SOFT DRINK','17.98'],['SPRITE ZERO','53.94']]);
+ assert.equal(audit.discounts,'14.00');
+ assert.equal(audit.netSum,'75.91');
+ assert.deepEqual(audit.warnings,[]);
+});
+
+test('a loyalty points footer cannot become another purchase when its subtotal is damaged',()=>{
+ const text='BREAD $2.75\nBonus Points 1 Pts\nFRUIT 400 Pts\n200 Pts\nSAMPLE BREAD 300 Pts\naVTES 34.56\nSAMPLE COOKIES\nSUBTOTAL\nTOTAL 35.12';
+ assert.deepEqual(parseReceipt(text).map(row=>[row.name,row.amount]),[['BREAD','2.75']]);
+ const offer='OATS $3.00\nBonus Points 100 Pts\nRICE $4.00\nSUBTOTAL $7.00';
+ assert.deepEqual(parseReceipt(offer).map(row=>row.name),['OATS','RICE']);
+});
+
+test('a printed item beside a merged points offer keeps its own supported count and amount',()=>{
+ const text='MILK $3.99\nX8900T005fers TEST OATS BAR MRJ 500 Pts\n(3)12345678901\n3 @ $2.13 6.39\nYOGURT $5.99\nSUBTOTAL $16.37';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.qty]),[['MILK','3.99',1],['TEST OATS BAR','6.39',3],['YOGURT','5.99',1]]);
+ assert.match(rows[1].raw,/500 Pts/);
+ assert.match(rows[1].raw,/\(3\)12345678901/);
+ const noPrice=parseReceipt('MILK $3.99\nX8900T005fers TEST OATS BAR MRJ 500 Pts\n(3)12345678901\n3 @ $2.13\nYOGURT $5.99');
+ assert.deepEqual(noPrice.map(row=>row.name),['MILK','YOGURT']);
+ assert.deepEqual(parseReceipt('MILK $3.99\nIn-Stare Offers 500 Pts\nRICE $4.00\nSUBTOTAL $7.99').map(row=>row.name),['MILK','RICE']);
+});
+
+test('a department joined to a purchase keeps the product, while a two-line bottle deposit remains a charge',()=>{
+ const text='21-GROCERY SAMPLE ORANGE SODA HMRJ 8.29\n22-DAIRY\n12345678901 SAMPLE MILK RQ\n5.00\n26-LIQUOR\n(2)12345678902 SAMPLE BEER HQ\n2 @ $2.79 5.58\nDEPOSIT 1\n2@$0.10 0.20\n27-PRODUCE\n(2)12345678903 SAMPLE POTATO 10LB MRJ\n2 @ $1.99 3.98\n-0.98\n31-MEATS\n12345678904 SAMPLE CHICKEN DRUMSTICKS 4.47\n41-HOME\n(3)24633 DIG STAMP EARN Q\n3 @ $0.00 0.00\nSUBTOTAL 26.54';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.department]),[
+  ['SAMPLE ORANGE SODA','8.29','kitchen'],['SAMPLE MILK','5.00','kitchen'],['SAMPLE BEER','5.58','exclude'],
+  ['SAMPLE POTATO','3.98','kitchen'],['SAMPLE CHICKEN DRUMSTICKS','4.47','exclude']
+ ]);
+ assert.equal(rows[0].raw,'21-GROCERY SAMPLE ORANGE SODA HMRJ 8.29');
+ assert.equal(rows[3].qty,9.071847);assert.equal(rows[3].unit,'kg');assert.equal(rows[3].packCount,2);
+ assert.equal(audit.charges,'0.20');assert.equal(audit.discounts,'0.98');assert.equal(audit.netSum,'26.54');assert.deepEqual(audit.warnings,[]);
+});
+
+test('a survey prize before a basket never becomes stock or attaches to the first barcode-labelled item',()=>{
+ const text='Walmart\nHow did we do today?\nComplete our short customer survey at\nSURVEY.EXAMPLE.CA\n1 of 3 $1000\ngift cards\nRules and regulations apply.\nSee contest rules for details.\nSAMPLE SODA 056000010660 $8.28 J\nSAMPLE CLEANER 059631882930 $3.97 J\nSAMPLE CLEANER 059631882930 $3.97 J\nSUBTOTAL $16.22\n# ITEMS SOLD 3';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(({name,amount,itemNumber})=>[name,amount,itemNumber]),[
+  ['SAMPLE SODA','8.28','056000010660'],['SAMPLE CLEANER','3.97','059631882930'],['SAMPLE CLEANER','3.97','059631882930']
+ ]);
+ assert.equal(rows[0].raw,'SAMPLE SODA 056000010660 $8.28 J');
+ assert.equal(audit.productCount,3);assert.equal(audit.netSum,'16.22');assert.deepEqual(audit.warnings,[]);
+});
+
+test('a printed six-pack is one package and a trailing W tax code is not part of the name',()=>{
+ const rows=parseReceipt('TEST SODA 6 PK W $13.99\n2 @ $13.99 W $27.98\nSUBTOTAL $27.98');
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].name,'TEST SODA');
+ assert.equal(rows[0].qty,2);
+ assert.equal(rows[0].unit,'packet');
+ assert.equal(rows[0].packSize,6);
+ assert.equal(rows[0].packUnit,'pcs');
+ assert.equal(rows[0].packCount,2);
+ assert.equal(rows[0].amount,'27.98');
+});
+
+test('implausibly large OCR package sizes require stock correction',()=>{
+ const [row]=parseReceipt('DISH SOAP 2504L $2.83\nTOTAL $2.83');
+ assert.equal(row.amount,'2.83');
+ assert.equal(row.qty,1);
+ assert.equal(row.unit,'pcs');
+ assert.equal(row.quantityKnown,false);
+ assert.match(row.warning,/implausibly large/);
+ assert.match(row.raw,/2504L/);
+});
+
+test('French weighed rate repairs one OCR digit only when printed weight and total reconcile',()=>{
+ const rows=parseReceipt('CHEESE 4.22 € 11\nPesée manuelle\n0.,302 kg X 13.99 (/kg\nTOMATO 5.47 € 11\nPes@e nanuelle\n1.371 kg X 3.93 t/kg\nTOTAL 9.69 €');
+ assert.equal(rows.length,2);
+ assert.equal(rows[0].qty,0.302);
+ assert.equal(rows[0].unit,'kg');
+ assert.equal(rows[0].amount,'4.22');
+ assert.equal(rows[1].amount,'5.47');
+ assert.equal(rows[1].quantityKnown,true);
+ assert.equal(rows[1].qty,1.371);
+ assert.equal(rows[1].unit,'kg');
+ assert.equal(rows[1].unitPrice,'3.99');
+ assert.deepEqual(rows[1].rateCorrection,{read:'3.93',reconciled:'3.99'});
+ assert.match(rows[1].warning,/OCR unit price was reconciled/);
+ assert.match(rows[1].raw,/3\.93 t\/kg/);
+ const unresolved=parseReceipt('TOMATO 5.47 € 11\n1.371 kg X 2.33 t/kg\nTOTAL 5.47 €')[0];
+ assert.equal(unresolved.quantityKnown,false);
+ assert.match(unresolved.warning,/weight × unit price/);
+});
+
+test('damaged French departments stay separate from priced product labels',()=>{
+ const text='CONDINENIS-SAUCES FRO DF\nOLIVES NYONS 230G (T) 3.62 € 11\nCONFIMURES MIEL P.A.TMRIINER\nCONFITURE MYRTILLES 370G (T) 2.64 € 11\nFRUITS\nRAISIN NOIR MUSCAT (T) 3.04 € 11\nLEGUNES\nTOMATE RONDE EN GRAPPE (市) 5.47 € 11\nKIZ\nRIZ 10MN RAPIDE 900G (T) 4.30 € 11\nTOTAL 19.07 €';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[
+  ['OLIVES NYONS','3.62'],['CONFITURE MYRTILLES','2.64'],
+  ['RAISIN NOIR MUSCAT','3.04'],['TOMATE RONDE EN GRAPPE','5.47'],
+  ['RIZ 10MN RAPIDE','4.30']
+ ]);
+ assert.deepEqual(parseReceipt('CONFITURE MIEL 370G 2.64 € 11\nTOTAL 2.64 €').map(row=>row.name),['CONFITURE MIEL']);
 });

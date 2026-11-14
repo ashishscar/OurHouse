@@ -26,4 +26,5 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - run: python3 scripts/receipt-training/test_ocr_layout.py
       - run: node scripts/release-gate.mjs validate
