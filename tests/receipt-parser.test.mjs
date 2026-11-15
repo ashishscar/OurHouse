@@ -39,6 +39,26 @@ test('a priced bottle deposit is a charge and a zero-dollar department heading i
  assert.equal(audit.charges,'0.60');assert.equal(audit.netSum,'14.59');assert.deepEqual(audit.warnings,[]);
 });
 
+test('German till positions include a deposit but payment and tax are not stock',()=>{
+ const lines=['MUSTER MARKT','HAFERFLOCKEN 2,50 A','APFELSAFT 3,00 B','Pfand 0,25*B','Posten: 3','SUMME € 5,75','EC-Cash 5,75','Betrag EUR 5,75','MWSt NETTO MWSt UMSATZ','A 7% 5,50'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-german-receipt.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount]),[['HAFERFLOCKEN','2.50'],['APFELSAFT','3.00']]);
+ assert.equal(doc.audit.charges,'0.25');
+ assert.equal(doc.audit.total,'5.75');
+ assert.equal(doc.audit.productCount,3);
+ assert.equal(doc.audit.packCount,2);
+ assert.equal(doc.audit.tillPositions,3);
+ assert.equal(doc.audit.netSum,'5.75');
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
+test('German food, meat, and rennet-uncertain cheese receive conservative sections',()=>{
+ const lines=['MUSTER MARKT','BIO OLIVENÖL 4,50 A','NATUR HUMMUS 1,20 A','SALAMI 2,30 A','SCHINKENWÜRFEL 2,40 A','HÄHNCHENBRUST 3,10 A','BERGKÄSE 2,70 A','SUMME € 16,20'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-german-food.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>row.section),['kitchen','kitchen','','','','']);
+ assert.deepEqual(doc.items.map(row=>Boolean(row.excludedFromPantry)),[false,false,true,true,true,false]);
+});
+
 test('bottle price with included deposits keeps its product, units and expense without pantry stock',()=>{
  const lines=['SAMPLE LIQUOR STORE','SAMPLE WINE','90001234 01250ML DEP .10 ea.','(4 @ 5.00) 20.40','Total 20.40','Deposit (DEP) 0.40','Gift Card 10.00','Visa 10.40'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-bottle.jpg'},{ai:true});

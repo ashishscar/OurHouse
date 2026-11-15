@@ -4,7 +4,7 @@ const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
 const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})\.?(?:\s*(?:CAD|USD|INR|GBP|EUR|€|£|₹))?\s*(?:[A-Z*×]{1,4}[\d\[\]]{0,2}|\d{1,2}|[\u3400-\u9fff])?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
-const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
+const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price|posten|summe|ec[\s-]*cash|betrag|mwst)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
@@ -74,7 +74,7 @@ function printedDepartment(line){
  return family?['MEATS','LIQUOR'].includes(family)?'exclude':['HOME','HOUSEHOLD','CLEANING'].includes(family)?'household':'kitchen':'';
 }
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
-function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:bottle\s+)?deposit(?:\s+\d{1,3})?\s*$/i.test(priced.body)?priced.amount:null;}
+function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand)\s*$/i.test(priced.body)?priced.amount:null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
  const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|#-]+[A-Z]?)\s+(?=[A-Z])/i);
@@ -222,7 +222,7 @@ export function parseReceipt(text){
   // Standalone tax codes are columns, not labels; retain the pending item.
   if(/^(?:H?MRJ|RQ|HQ)$/i.test(line))continue;
   if(rows.length&&/^TOTL\s*\[\d+\]\s*Articles?\b/i.test(line))break;
-  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
+  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\s*$/i.test(line.replace(/^[*\s]+/,'')))break;
   if(/^final\s+sale\b/i.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(/^Pes\S{1,3}\s+[mn]anuelle$/i.test(line))continue;
   const weighedRate=line.match(/^(\d+[.,]{1,2}\d{1,3})\s*(kg|g|lb)\s*[@x×]\s*(\d+[.,]\d{2})(?:\s*[(6t€/]\s*\/?\s*(?:kg|g|lb))?\s*$/i);
@@ -233,7 +233,7 @@ export function parseReceipt(text){
    if(repaired){applyRate(last,[null,String(count),weighedRate[2],repaired]);last.raw+='\n'+line;last.rateCorrection={read:weighedRate[3],reconciled:repaired};last.warning='The OCR unit price was reconciled with the printed weight and item amount. Check the photo before selecting it.';continue;}
    last.warning='The printed weight × unit price does not match this product amount. Enter the stock weight from the photo before selecting it.';last.unmatchedQuantity=line;continue;
   }
-  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
+  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
   // A refundable till deposit contributes to the bill but is not stock.
   if(separateDeposit(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){
@@ -364,14 +364,40 @@ export function parseReceipt(text){
 export function pantryReceipt(text){return parseReceipt(text).slice(0,500).map(row=>({...row,pick:false,confidence:'review'}));}
 export function expenseReceipt(text){return parseReceipt(text).map(({name,amount,raw})=>({name,amount,raw}));}
 export function auditReceipt(text,items=pantryReceipt(text)){
- const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,charges=0,purchaseDone=false;
- for(const [index,raw] of lines.entries()){const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);if(!purchaseDone){const deposit=separateDeposit(line);if(deposit)charges+=Number(deposit);else if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){const next=splitPrice(lines[index+1]||''),rate=next?.body.match(ratePattern);if(rate&&Math.abs(num(rate[1])*num(rate[3])-Number(next.amount))<=.03)charges+=Number(next.amount);}}if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line);if(p&&totalHeading&&!/^total\s+(?:discount|tax|vat|tva)\b/i.test(line)){const isSubtotal=/^(?:sub|sous)/i.test(line),amounts=line.match(/\d+[.,]\d{2}/g)||[];if(!isSubtotal||!footer.total&&amounts.length===1)footer[isSubtotal?'subtotal':'total']=p.amount;purchaseDone=true;}const count=printedReceiptCount(line);if(count){footer.productCount=Number(count.value);if(count.headingCorrected)footer.productCountEvidence=count;}const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);if(partial)footer.partialBasketCount=Number(partial[1]);}
+ const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,charges=0,depositPositions=0,purchaseDone=false;
+ for(const [index,raw] of lines.entries()){
+  const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);
+  if(!purchaseDone){
+   const deposit=separateDeposit(line);
+   if(deposit){charges+=Number(deposit);depositPositions++;}
+   else if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){
+    const next=splitPrice(lines[index+1]||''),rate=next?.body.match(ratePattern);
+    if(rate&&Math.abs(num(rate[1])*num(rate[3])-Number(next.amount))<=.03){charges+=Number(next.amount);depositPositions++;}
+   }
+  }
+  if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);
+  else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);
+  const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line);
+  if(p&&totalHeading&&!/^total\s+(?:discount|tax|vat|tva)\b/i.test(line)){
+   const isSubtotal=/^(?:sub|sous)/i.test(line),amounts=line.match(/\d+[.,]\d{2}/g)||[];
+   if(!isSubtotal||!footer.total&&amounts.length===1)footer[isSubtotal?'subtotal':'total']=p.amount;
+   purchaseDone=true;
+  }
+  const count=printedReceiptCount(line);
+  if(count){footer.productCount=Number(count.value);if(count.headingCorrected||count.label==='Posten')footer.productCountEvidence=count;}
+  const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);
+  if(partial)footer.partialBasketCount=Number(partial[1]);
+ }
  if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*number\s+of\s+items\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
  const netSum=rounded(itemSum+charges-discounts);
  if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
- if(footer.productCount&&packCount!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+packCount+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
+ // German "Posten" counts a separately priced refundable deposit as a till
+ // position. Keep the printed count, but compare it with products plus that
+ // charge position so a complete basket does not trigger a false warning.
+ const countedPositions=packCount+(footer.productCountEvidence?.label==='Posten'?depositPositions:0);
+ if(footer.productCount&&countedPositions!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+countedPositions+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
  if(items.some(item=>item.warning))warnings.push('Some products need review. Check the flagged items against the photo before adding them.');
- return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...footer,warnings};
+ return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...(footer.productCountEvidence?.label==='Posten'?{tillPositions:countedPositions}:{}),...footer,warnings};
 }
