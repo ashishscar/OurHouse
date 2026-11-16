@@ -36,6 +36,7 @@ protectedWords.add('eggplant');
 // A supported subset is not enough if it drops the product itself or a visible
 // flavour. Keep these identity words while allowing brand/pack words to go.
 for(const word of 'rice flour atta dal lentil bean pea cashew peanut almond milk cream yogurt yoghurt dahi cheese butter ghee bread wheat bun pav tortilla ketchup sauce dressing chutney pickle achar papad sev gathiya chevdo bhakharwadi bhakarwadi khari makhania burger biscuit cracker boondi mathia jaggery sugar salt oil tea coffee water juice soda cola spice essence tomato potato ginger chili cilantro coriander mint lettuce romaine spinach broccoli cucumber carrot pumpkin gourd okra corn banana apple grape clementine avocado papaya mango flax sesame saffron soap shampoo conditioner toothpaste toothbrush detergent cleaner tissue napkin towel paper bag lighter plier tool foil bleach sanitizer sponge broom mop laundry body hand wash coconut thai onion orange chicken drink jumbo bouill legum legumes tomacouli pois haricots thon persil thym estragon origan fromage huile pates riz pesto lasag oeuf coquillette veget vegeta vegetales taboule poule soja escalope veloute'.split(' '))protectedWords.add(word);
+for(const word of 'uova pane peperoni broccoli tortelli zucca polenta clementine kiwi datteri avena patatine pancake nocciole frutta frutia porcino bauletto cereali piselli carotine sesamo'.split(' '))protectedWords.add(word);
 const household=/\b(?:backpacks?|body\s*wash|hand\s*(?:wash|soap)|soap|shampoo|conditioner|toothpaste|toothbrush|toilet\s*(?:paper|roll)|bath\s*tissue|paper\s*towels?|tissues?|mouchoirs?|napkins?|detergent|dish\s*(?:soap|liquid)|dishwasher|cleaner|cleaning|windex|swiffer|lys[o0]l|dryer\s*sheets?|fabric\s*softener|laundry|tide\s+coldwtr|downy\s+beads|colgate\s+tp|ibuprofen|ibu\s*\d{3,4}m|trash\s*bags?|garbage\s*bags?|plastic\s*bags?|shopping\s*bags?|carry\s+bags?|reuse\s*bags?|lighter|pliers?|tools?|foil|cling\s*wrap|parchment|bleach|sanitizer|sponge|broom|mop|cintres?|vaissel\w*|dent\.?\s*[a-z]?\s*\/\s*tartre|piles?\s+(?:spe\s+)?cr\d{4})\b/i;
 const food=/\b(?:eggs?|milk|cream|yogurt|yoghurt|yog\s+drinks?|ayran|dahi|paneer|cheese|butter|ghee|rice|flour|atta|dal|lentils?|beans?|peas?|cashews?|peanuts?|almonds?|nuts?|oil|sugar|jaggery|salt|pepper|peppers|tomatoes|tomato|potatoes|potato|banana|bananas|apple|apples|grapes?|cherr(?:y|ies)|clementines?|avocados?|papaya|ginger|chill?i|cilantro|coriander|mint|romaine|lettuce|spinach|broccoli|cucumber|carrot|pumpkin|ash\s*gourd|okra|bhindi|corn|bread|buns?|pav|tortilla|khakh?ra|khakhara|gathiya|gathiya|sev|chevdo|mixture|bhakharwadi|bhakarwadi|khari|makhania|burgers?|biscuits?|crackers?|papad|puri|pickles?|achar|chutney|sauce|ketchup|dressing|tea|coffee|waters?|juice|soda|cola|vinegar|spices?|masala|essence|moraiyo|mukhwas|boondi|mathia|snacks?|chips?|olives?|tofu|oats?|barley|quinoa|mango|flax|sesame|saffron|crunchem|chicken|onions?|soft\s+drinks?|limeade|m\s*&\s*ms\b|sprite|coconut|monster\s+(?:ultra|vrty)|wasabi|mustard|noodles?|soya|legumes?|v[ée]g[ée]tales?|yaourts?|fromages?|riz|p[aâ]tes|persil|thym|estragon|origan|huile)\b/i;
 const frenchFood=/\b(?:espres(?:so)?|cafe|confitures?|mais|raisins?|tomates?|laitues?|potimarrons?|basma(?:ti|i)|torsades|skyr|moutarde|myrtilles?|[od]eufs)\b/i;
@@ -151,7 +152,7 @@ function merchantProduct(receiptName,receiptText){
 // review; unfamiliar tokens are never completed from a product guess.
 const displayTokens={wtr:'Water',tiss:'Tissue',jmbo:'Jumbo',mnstr:'Monster',lys0l:'Lysol',prsvd:'Preserved','0nions':'Onions','0range':'Orange'};
 const brandTrimWords=new Set([...protectedWords,...'wasabi in tube family size light prsvd preserved mustard stem truffle instant noodle sweetened soya drink'.split(' ')]);
-function normalizedReceiptName(receiptName){
+function normalizedReceiptName(receiptName,italianColumns=false){
  if(!receiptSection(receiptName))return receiptName;
  if(/^TOM\s+(?:DICED|CRUSHED|WHOLE)$/i.test(receiptName))return receiptName.replace(/^TOM\s+(DICED|CRUSHED|WHOLE)$/i,(_,form)=>`${form[0]}${form.slice(1).toLowerCase()} tomatoes`);
  // A short, opaque till prefix may be a brand. Drop it only when the
@@ -164,6 +165,13 @@ function normalizedReceiptName(receiptName){
   const candidate=tokens.slice(twoWordPrefix?2:1).join(' ');
   const groundedWords=candidate.toLowerCase().split(/\s+/);
   if(groundedWords.length>=2&&groundedWords.every(word=>brandTrimWords.has(word)||/^\d+(?:[.,]\d+)?(?:%|g|kg|l|ml|lb|pk)$/.test(word))&&receiptSection(candidate)&&supportedName(candidate,receiptName))name=candidate;
+ }
+ // Italian tills with explicit description/VAT/price columns put a leading
+ // brand before a legible product type. Keep this contextual: on a plain
+ // grocery line, an unfamiliar first word may instead be a variety.
+ if(name===receiptName&&italianColumns&&tokens.length>=3&&/^[A-Z]{5,}$/.test(first)&&!receiptSection(first)&&!excludedFood.test(first)&&!uncertainRennet.test(first)){
+  const candidate=tokens.slice(1).join(' ');
+  if(receiptSection(candidate)&&supportedName(candidate,receiptName))name=candidate;
  }
  // Packaging stays in receiptName and raw for exact review and copying.
  const withoutPackage=name.replace(/\s+IN\s+(?:A\s+)?TUBE(?:\s+FAMILY\s+SIZE)?$/i,'').replace(/\s+FAMILY\s+SIZE$/i,'');
@@ -246,6 +254,7 @@ function repeatedNames(items){
 }
 export function identifyReceiptItems(rows,annotations=[],receiptText=''){
  const retailer=costcoEvidence(receiptText)?'costco':/^\s*Walmart\b/i.test(String(receiptText).split(/\r?\n/).find(line=>line.trim())||'')?'walmart':/^\s*LCB[O0]\b/i.test(String(receiptText).split(/\r?\n/).find(line=>line.trim())||'')?'lcbo':'';
+ const italianColumns=/DESCRIZI(?:ONE|OME)/i.test(receiptText)&&/IVA\s+PREZZ[O0]/i.test(receiptText);
  return repeatedNames(reconcileRepeatedLabels(rows).map(row=>{
   const receiptName=row.receiptName||row.name,physical=String(row.raw||'').split('\n').map(s=>s.trim()),matches=annotations.filter(a=>physical.includes(a.source));
   const suggestions=[...new Set(matches.map(a=>qualifiedReceiptName(a.name,receiptName)).filter(Boolean))];
@@ -255,7 +264,7 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // The exception must not extend to unverified meat-flavoured products.
   const plantBasedSeasoning=/^TOMAX STEAM MEAT 5 SPICES PDR$/i.test(receiptName)?{name:'Five-spice powder',section:'kitchen',source:'https://www.tomax.com.tw/product/ins.php?index_id=134'}:null;
   const verified=catalog&&(!clear||clear===catalog.section)?catalog:plantBasedSeasoning,merchantName=merchantProduct(receiptName,receiptText);
-  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:merchantName||(suggestions.length===1?suggestions[0].trim():row.repeatedName||normalizedReceiptName(receiptName));
+  const name=/^SURATI\s+BHINDI$/i.test(receiptName)?'Bhindi':verified?verified.name:merchantName||(suggestions.length===1?suggestions[0].trim():row.repeatedName||normalizedReceiptName(receiptName,italianColumns));
   const sections=[...new Set(matches.map(a=>a.section==='pantry'?'kitchen':a.section==='household'?'household':'').filter(Boolean))];
   // A clear printed product type wins over a contradictory model category.
   // A printed department resolves otherwise opaque till labels. A specific
@@ -267,6 +276,6 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   const excluded=row.department==='exclude'&&!clear&&!vegetarianPasta&&!buckwheatGalette||verified?.section==='exclude'||excludedFood.test(receiptName)&&!plantBasedSeasoning||nonStock.test(receiptName);
   const rennetReview=uncertainRennet.test(receiptName)&&!/\b(?:paneer|vegan|plant.based|vegetarian|microbial\s+rennet)\b/i.test(receiptName);
   const section=excluded||rennetReview?'':clear||verified?.section||(vegetarianPasta?'kitchen':'')||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');
-  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),...(rennetReview?{warning:[row.warning,'Check whether this cheese contains animal rennet before adding it to a vegetarian pantry.'].filter(Boolean).join(' ')}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
+  return {...row,name,receiptName,section,...(excluded?{excludedFromPantry:true,exclusionReason:nonStock.test(receiptName)?'non-stock':'vegetarian'}:{}),...(rennetReview?{warning:[row.warning,'Check whether this cheese contains animal rennet before adding it to a vegetarian pantry.'].filter(Boolean).join(' ')}:{}),nameSource:verified?'verified-catalog':merchantName&&name===merchantName?'merchant-prefix':row.repeatedName&&name===row.repeatedName?'repeated-label':name===receiptName?(row.ocrName?'repeated-label':'receipt'):name===normalizedReceiptName(receiptName,italianColumns)?'normalized-receipt':'suggestion',...(verified?{catalogSource:verified.source}:{})};
  }));
 }

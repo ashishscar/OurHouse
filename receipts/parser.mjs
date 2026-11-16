@@ -137,6 +137,9 @@ export function parseReceiptFields({label,amount:price,quantityLine=''}){
 }
 export function parseReceipt(text){
  const source=String(text||'').slice(0,200000);
+ // The explicit IVA/PREZZO headers identify a separate VAT column. Its
+ // one- or two-character code is not part of the product's printed name.
+ const italianTaxColumn=/DESCRIZI(?:ONE|OME)/i.test(source)&&/IVA\s+PREZZ[O0]/i.test(source);
  // French tills often append a VAT code after the euro sign. An OCR reader
  // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
  // glyphs on a receipt with independent French/euro footer evidence.
@@ -144,6 +147,7 @@ export function parseReceipt(text){
  const lines=source.split(/\r?\n/).map(x=>{
   const trimmed=x.replace(/\u00a0/g,' ').trim();
   let repaired=frenchEuro?trimmed.replace(/(\d+[.,]\d{2})\s*[ct(46](?=\s+(?:\d+[.,]\d{2}|1[13]\b))/gi,'$1 €').replace(/(\d+[.,]\d{2})\s*\($/,'$1 €'):trimmed;
+  if(italianTaxColumn)repaired=repaired.replace(/\s+(?:C|4|10|22|行3)\s+(?=\d+[.,]\d{2}\s*$)/iu,' ');
   // A third OCR glyph after a two-decimal unit price can be a damaged euro
   // sign. Repair it only when count × the first two decimals exactly equals
   // the independently printed line amount.

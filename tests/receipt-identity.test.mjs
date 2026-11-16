@@ -8,6 +8,20 @@ test('verified food types are pantry even when a receipt omits the word snack',(
  for(const label of ['BR 5050 FAMILY','UNKNOWN SWEET&SALTY FAMILY','COLDWTR CLEANER'])assert.notEqual(receiptSection(label),'kitchen',label);
  assert.equal(receiptSection('TAB.L-VAISS.FINISH QUANTUM'),'household');
 });
+test('Italian VAT columns stay out of names and grounded products can lose a leading brand',()=>{
+ const text='DESCRIZIONE IVA PREZZO(€)\nPAGNAN MISTO FRUTTA ELITE C 5,49\nPODERE UOVA M GIALLE SCAT 10 3,90\nPANE AFFETTATO CASERECCIO 4 0,43\nASIAGO BROCCOLI ROSETTA K 4 2,20\nTOTALE COMPLESSIVO 12,02';
+ const doc=documentFrom([{lines:text.split('\n'),native:true}],{name:'synthetic-italian.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.name,item.amount]),[
+  ['PAGNAN MISTO FRUTTA ELITE','MISTO FRUTTA ELITE','5.49'],
+  ['PODERE UOVA M GIALLE SCAT','UOVA M GIALLE SCAT','3.90'],
+  ['PANE AFFETTATO CASERECCIO','PANE AFFETTATO CASERECCIO','0.43'],
+  ['ASIAGO BROCCOLI ROSETTA K','ASIAGO BROCCOLI ROSETTA K','2.20']
+ ]);
+ assert.equal(doc.items[3].section,'');
+ assert.match(doc.items[3].warning,/animal rennet/);
+ assert.equal(doc.audit.netSum,doc.audit.total);
+ assert.equal(identifyReceiptItems([{name:'PAGNAN MISTO FRUTTA ELITE',raw:'PAGNAN MISTO FRUTTA ELITE 5.49',amount:'5.49',qty:1,unit:'pcs'}],[],'GROCERY')[0].name,'PAGNAN MISTO FRUTTA ELITE');
+});
 test('French fish and meat labels remain excluded while vegetarian labels can enter Pantry',()=>{
  const rows=[
   {name:'TEST THON',raw:'TEST THON 2,40 €',amount:'2.40',qty:1,unit:'pcs'},
