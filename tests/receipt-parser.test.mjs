@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('Italian till total and payment rows stay outside stock, with meat excluded',()=>{
+ const lines=['TEST OLIVE 1,20','TEST POLLO 2,50','TEST GANBERETTI 3,00','TOTALE COMPLESSIVO 6,70','di cui IVA 0,40','Pagamento elettronico 6,70','Importo pagato 6,70'];
+ const doc=documentFrom([{lines,native:true}],{name:'synthetic-italian.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>item.amount),['1.20','2.50','3.00']);
+ assert.equal(doc.audit.total,'6.70');
+ assert.equal(doc.audit.netSum,'6.70');
+ assert.equal(doc.items[0].section,'kitchen');
+ assert.ok(doc.items[1].excludedFromPantry);
+ assert.ok(doc.items[2].excludedFromPantry);
+});
+
 test('explicit piece packs use their printed count without changing purchased units',()=>{
  const capsule=parseReceiptFields({label:'L OR ESPRESSO FORZA X30CAPS',amount:'8.99'});
  const tablet=parseReceiptFields({label:'TAB.L-VAISS.FINISH QUANTUM X68',amount:'9.99'});

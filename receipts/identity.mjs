@@ -44,11 +44,14 @@ const frenchFood=/\b(?:espres(?:so)?|cafe|confitures?|mais|raisins?|tomates?|lai
 // catalog; retain its printed name because the receipt gives no pack details.
 // https://www.kerrygold.de/produkte/gesalzene-butter-aus-irischer-weidemilch/
 const germanFood=/\b(?:[o0]liven[oö0]l|hon[i1l]g|hummus|m[oö]hren|apfel|ananas|z[i1]mtschnecke|haferflocken|apfelsaft|kerrygold\s+gesalzen)\b/i;
-export function receiptSection(label){const expanded=words(label).join(' '),folded=expanded.normalize('NFD').replace(/\p{M}/gu,'');return household.test(label)||household.test(expanded)||/\bTAB\.?L[-\s]?VAISS/i.test(label)?'household':food.test(label)||food.test(expanded)||frenchFood.test(folded)||germanFood.test(label)||/\beggplants?\b/i.test(expanded)||/\btom\s+(?:diced|crushed|whole)\b|\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
-const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light|thon|poisson|poulet|poule|jambon|porc|agneau|canard|saucisson|viande|sardines?|boeuf|bœuf|vins?|champagnes?|cr[eé]mant|ci[do]re(?:bret)?|salam[i1]|schinkenw\S*|h[aä]hnchen\S*)\b|\bsteak\s+hach[eé](?!\p{L})/iu;
+const italianFood=/\b(?:uova|pane|panettone|peperoni|broccoli|tortelli|zucca|polenta|clementine|kiwi|datteri|avena|patatine|pancake|nocciole|marroni|asparagi|olive|yog\w*|succo|infus[oi]|sesamo|arachidi|cacahuetes|frut[ti]a|porcino|bauletto|cereali|piselli|carotine)\b/i;
+export function receiptSection(label){const expanded=words(label).join(' '),folded=expanded.normalize('NFD').replace(/\p{M}/gu,'');return household.test(label)||household.test(expanded)||/\bTAB\.?L[-\s]?VAISS|\bESSUIE[-\s]?TOUT\b|\bDEMAK\s*UP\s+DISQ\b/i.test(label)?'household':food.test(label)||food.test(expanded)||frenchFood.test(folded)||germanFood.test(label)||italianFood.test(label)||/\beggplants?\b/i.test(expanded)||/\btom\s+(?:diced|crushed|whole)\b|\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
+// The abbreviated Beretta Praga sandwich is verified as a ham product by its
+// retailer listing: https://www.coopshop.it/product/tramezzino-praga-beretta140g
+const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light|thon|poisson|poulet|poule|jambon|porc|agneau|canard|saucisson|viande|sardines?|boeuf|bœuf|vins?|champagnes?|cr[eé]mant|ci[do]re(?:bret)?|salam[i1]|schinkenw\S*|h[aä]hnchen\S*|pollo|suino|ga[mn]beretti|baccal[aà]|bresaola|mortad(?:ella)?|prosciutto|prosc\.?|salmone|luganeghe|birra|neipa|(?:double\s+)?ipa)\b|\bsteak\s+hach[eé](?!\p{L})|\bberetta\s+tram\.?\s*praga\b/iu;
 // An OCR label cannot establish whether a ripened cheese uses animal rennet.
 // Paneer is acid-set; otherwise leave cheese products unassigned for review.
-const uncertainRennet=/\b(?:cheese|fromage|morbier|fourme|brie|camembert|gruy[eè]re|gouda|cheddar|parmesan|feta|emmental|k[aä]se|padano)\b/i;
+const uncertainRennet=/\b(?:cheese|fromage|morbier|fourme|brie|camembert|gruy[eè]re|gouda|cheddar|parmesan|feta|emmental|k[aä]se|padano|asiago|mozzarella|mozzarelle|robiola)\b/i;
 // A gift card is a purchased expense but never stock, even at a grocery store.
 const nonStock=/\b(?:e?gift\s*cards?|doordash\s*\d+\s*x\s*\d+)\b/i;
 export function supportedName(proposed,receiptName){
