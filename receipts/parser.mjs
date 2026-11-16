@@ -39,14 +39,16 @@ function reconciledWeighedRate(readRate,weight,lineTotal){
  return candidates.size===1?(Array.from(candidates)[0]/100).toFixed(2):null;
 }
 function printedDepartment(line){
- line=line.replace(/^[\s>»]+/,'').trim();
+ line=line.replace(/^[\s>»]+/,'').trim().replace(/\s*\(\d{1,4}\s+produits?\)\s*$/i,'');
  const direct=line.match(/^(GROCERY|DAIRY|FROZEN|PRODUCE|BAKERY|DELI|HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)(?:\s+\$?0[.,]00)?\s*$/i);
  if(direct)return /^(?:HOME|HOUSEHOLD|PERSONAL\s+CARE|CLEANING)$/i.test(direct[1])?'household':'kitchen';
  if(splitPrice(line))return '';
  // French supermarket receipts use unpriced department lines. Match the
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
- const compact=line.toUpperCase().replace(/[^A-Z]/g,'');
+ const compact=line.normalize('NFD').replace(/\p{M}/gu,'').toUpperCase().replace(/[^A-Z]/g,'');
+ const orderTable={LAITIEROEUFSVEGETAL:'kitchen',CHARCUTERIETRAITEUR:'exclude',SURGELES:'unknown',EPICERIESALEE:'kitchen',EPICERIESUCREE:'kitchen',BOISSONS:'kitchen',HYGIENEBEAUTE:'household'};
+ if(orderTable[compact])return orderTable[compact];
  if(/^E[NM]TRETIEN$/.test(compact))return 'household';
  if(/^CHARCUTERIETRAITEURLS$/.test(compact))return 'exclude';
  if(/^CREMERIEFROMAGELS$/.test(compact))return 'cheese-review';
@@ -168,6 +170,7 @@ export function parseReceipt(text){
  for(const [lineIndex,originalLine] of lines.entries()){
   let line=originalLine;
   if(consumed.has(lineIndex))continue;
+  if(printedReceiptCount(line)&&!splitPrice(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;continue;}
   // A one-character VAT code can sit between a product label and its
   // priced count line. Keep the label only when the next line proves its
   // own amount by exact count × unit-price arithmetic.

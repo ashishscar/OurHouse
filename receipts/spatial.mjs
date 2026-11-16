@@ -12,6 +12,69 @@ export function normBox(index,text,q,score=0.95){
  const left=[(q[0][0]+q[3][0])/2,(q[0][1]+q[3][1])/2],right=[(q[1][0]+q[2][0])/2,(q[1][1]+q[2][1])/2];
  const dx=right[0]-left[0];return {index,text,x:(left[0]+right[0])/2,y:(left[1]+right[1])/2,slope:Math.abs(dx)>1?(right[1]-left[1])/dx:0,h:Math.max(1,(distance2(q[0],q[3])+distance2(q[1],q[2]))/2),width:distance2(left,right),score,money:pricePattern.test(text)};
 }
+
+// Some digital grocery receipts print a description, quantity, unit price and
+// line total in four fixed columns. Keep the rightmost printed amount with
+// its own product; a unit price is never another purchase.
+export function assembleTabular(record){
+ validRecord(record);
+ const boxes=record.texts.map((text,i)=>normBox(i,text,record.boxes[i],record.scores[i]));
+ const slope=Number.isFinite(record.baseline_slope)&&Math.abs(record.baseline_slope)<.3?record.baseline_slope:median(boxes.map(box=>box.slope).filter(x=>Math.abs(x)<.3));
+ const rowY=box=>box.y-slope*box.x;
+ const sameRow=(a,b)=>Math.abs(rowY(a)-rowY(b))<=Math.max(12,Math.min(a.h,b.h)*.8);
+ const find=pattern=>boxes.filter(box=>pattern.test(box.text.trim())).sort((a,b)=>a.y-b.y);
+ const descriptions=find(/^(?:d[eé]signation|description|items?)$/i);
+ const quantities=find(/^(?:quantit[eé]|qty|quantity)$/i);
+ const unitPrices=find(/^(?:prix\s+unitaire(?:\s+ttc)?|unit\s+price)$/i);
+ const totals=find(/^(?:total\s+ttc|line\s+total)$/i);
+ const header=descriptions.map(description=>{
+  const near=list=>list.find(box=>sameRow(box,description));
+  return {description,quantity:near(quantities),unitPrice:near(unitPrices),total:near(totals)};
+ }).find(h=>h.quantity&&h.unitPrice&&h.total&&h.description.x<h.quantity.x&&h.quantity.x<h.unitPrice.x&&h.unitPrice.x<h.total.x);
+ if(!header)return null;
+ const {description,quantity,unitPrice,total}=header;
+ const medianHeight=median(boxes.map(box=>box.h));
+ const columnX=box=>box.x+slope*(box.y-description.y);
+ const footer=find(/^(?:total\s+de\s+la\s+commande|grand\s+total|total\s+order)\b/i).find(box=>box.y>description.y);
+ const bottom=footer?.y??Infinity;
+ const close=sameRow;
+ const numeric=(x,center,tolerance)=>Math.abs(columnX(x)-columnX(center))<=tolerance;
+ const money=box=>/^\d+[.,]\d{2}$/.test(box.text.trim());
+ const body=boxes.filter(box=>box.y>description.y+description.h&&box.y<bottom&&!money(box)&&columnX(box)<columnX(quantity)-2*medianHeight&&/[\p{L}]{3}/u.test(box.text));
+ const rows=[],seen=[];
+ for(const label of body.sort((a,b)=>a.y-b.y)){
+  if(seen.some(prior=>prior.text===label.text&&Math.abs(columnX(prior)-columnX(label))<medianHeight*.5&&Math.abs(rowY(prior)-rowY(label))<medianHeight*.5))continue;
+  seen.push(label);
+  const amount=boxes.find(box=>box.y>description.y&&box.y<bottom&&money(box)&&numeric(box,total,Math.max(90,(total.x-unitPrice.x)*.4))&&close(label,box));
+  if(!amount)continue;
+  const unit=boxes.find(box=>money(box)&&numeric(box,unitPrice,Math.max(90,(total.x-unitPrice.x)*.4))&&close(label,box));
+  const count=boxes.find(box=>/^\d{1,3}$/.test(box.text.trim())&&numeric(box,quantity,Math.max(90,(unitPrice.x-quantity.x)*.35))&&close(label,box));
+  const lineTotal=moneyValue(amount.text),unitCents=unit&&moneyValue(unit.text);
+  let quantityValue=count?Number(count.text):null;
+  if(unitCents&&lineTotal!==null){
+   const ratio=lineTotal/unitCents;
+   if(Number.isInteger(ratio)&&ratio>=1&&ratio<=100&&quantityValue!==ratio)quantityValue=ratio;
+  }
+  rows.push({label,amount,unit,count,quantityValue});
+ }
+ if(rows.length<2)return null;
+ const lines=[];
+ const orderCount=boxes.find(box=>box.y<description.y&&/\b\d{1,4}\s+produits\b/i.test(box.text)&&boxes.some(other=>/commande|order/i.test(other.text)&&close(box,other)));
+ const orderTitle=orderCount&&boxes.find(box=>/commande|order/i.test(box.text)&&close(box,orderCount));
+ if(orderCount)lines.push(`${orderTitle.text} ${orderCount.text}`);
+ let priorHeading=null;
+ for(const row of rows){
+  const heading=boxes.filter(box=>box.y>description.y&&box.y<row.label.y&&box.y>(priorHeading?.y??-Infinity)&&/\(\d{1,4}\s+produits?\)/i.test(box.text)&&box.x<quantity.x).at(-1);
+  if(heading&&heading!==priorHeading){lines.push(heading.text);priorHeading=heading;}
+  lines.push(`${row.label.text} ${row.amount.text}`);
+  if(row.quantityValue>1&&row.unit&&row.quantityValue*moneyValue(row.unit.text)===moneyValue(row.amount.text))lines.push(`${row.quantityValue} @ ${row.unit.text}`);
+ }
+ if(footer){
+  const amount=boxes.find(box=>money(box)&&close(footer,box)&&box.x>quantity.x);
+  if(amount)lines.push(`${footer.text} ${amount.text}`);
+ }
+ return {lines,rows:rows.length,printedOrderCount:orderCount?`${orderTitle.text} ${orderCount.text}`:null,footer:footer?.text??null};
+}
 const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.width/2,b.x+b.width/2)-Math.max(a.x-a.width/2,b.x-b.width/2));
 const rowDistance=(a,b)=>{const anchor=a.width>=b.width?a:b,other=a.width>=b.width?b:a;return Math.abs(other.y-anchor.y-anchor.slope*(other.x-anchor.x))/Math.max(1,(a.h+b.h)/2)};
 const label=row=>row.members.slice().sort((a,b)=>a.x-b.x).map(b=>b.text).join(' ');
