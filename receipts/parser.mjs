@@ -47,14 +47,14 @@ function printedDepartment(line){
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
  const compact=line.normalize('NFD').replace(/\p{M}/gu,'').toUpperCase().replace(/[^A-Z]/g,'');
- const orderTable={LAITIEROEUFSVEGETAL:'kitchen',CHARCUTERIETRAITEUR:'exclude',SURGELES:'unknown',EPICERIESALEE:'kitchen',EPICERIESUCREE:'kitchen',BOISSONS:'kitchen',HYGIENEBEAUTE:'household'};
+ const orderTable={LAITIEROEUFSVEGETAL:'kitchen',CHARCUTERIETRAITEUR:'exclude',CHARCUTERIELS:'exclude',TRAITEURLS:'unknown',SURGELES:'unknown',EPICERIESALEE:'kitchen',EPICERIESUCREE:'kitchen',BOISSONS:'kitchen',HYGIENEBEAUTE:'household',PARFUMERIECOSMETIQUE:'household',ECOVILLAGE:'unknown',ECONOMAT:'household'};
  if(orderTable[compact])return orderTable[compact];
  if(/^E[NM]TRETIEN$/.test(compact))return 'household';
  if(/^CHARCUTERIETRAITEURLS$/.test(compact))return 'exclude';
  if(/^CREMERIEFROMAGELS$/.test(compact))return 'cheese-review';
  if(/^LIQUIDE$/.test(compact))return 'kitchen';
  if(/^PERMANENTS$/.test(compact))return 'unknown';
- const french=[['AIDESALACUISINE','kitchen'],['CONDIMENTSSAUCESFROIDES','kitchen'],['CONFITURESMIELPATARTINER','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['FROMAGELS','kitchen'],['FROMAGECOUPEEMBALLE','kitchen'],['FRUITS','kitchen'],['LEGUMES','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen'],['CHAMPAGNESMOUSSEUX','exclude'],['VINSAOC','exclude'],['MOBILIER','household'],['PARFUMERIE','household'],['PRODUITSVAISSELLE','household']];
+ const french=[['AIDESALACUISINE','kitchen'],['CONDIMENTSSAUCESFROIDES','kitchen'],['CONFITURESMIELPATARTINER','kitchen'],['CONSERVESDELEGUMES','kitchen'],['CONSERVESDEPOISSON','exclude'],['EPICES','kitchen'],['EPICERIESALEE','kitchen'],['EPICERIESUCREE','kitchen'],['FROMAGELS','kitchen'],['FROMAGECOUPEEMBALLE','kitchen'],['FRUITS','kitchen'],['LEGUMES','kitchen'],['HUILES','kitchen'],['PATES','kitchen'],['RIZ','kitchen'],['SAUCESCHAUDES','kitchen'],['TRAITEURLSUICI','kitchen'],['ULTRAFRAIS','kitchen'],['FRUITSETLEGUMES','kitchen'],['LIQUIDES','kitchen'],['FROMAGEALACOUPE','kitchen'],['POISSONNERIE','exclude'],['CHARCTRAITSAUCSECSL','exclude'],['VOLLSINDUST','exclude'],['BOUCHVOLATELIER','exclude'],['CREMERIELS','kitchen'],['CHARCTTRAITTRADT','kitchen'],['EPICERIE','kitchen'],['CHAMPAGNESMOUSSEUX','exclude'],['VINSAOC','exclude'],['MOBILIER','household'],['PARFUMERIE','household'],['PRODUITSVAISSELLE','household']];
  const edits=(a,b)=>{let prior=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const next=[i];for(let j=1;j<=b.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(a[i-1]!==b[j-1]));prior=next;}return prior[b.length];};
  for(const [heading,section] of french)if(compact===heading||heading.length>=6&&Math.abs(compact.length-heading.length)<=2&&edits(compact,heading)<=(heading.length>=8?2:1))return section;
  // Thin thermal print can damage several letters in a long department
@@ -140,10 +140,11 @@ export function parseReceipt(text){
  // The explicit IVA/PREZZO headers identify a separate VAT column. Its
  // one- or two-character code is not part of the product's printed name.
  const italianTaxColumn=/DESCRIZI(?:ONE|OME)/i.test(source)&&/IVA\s+PREZZ[O0]/i.test(source);
+ const frenchVatColumn=/\bTVA\s+DESCRIPTION\s+QTE\b/i.test(source)&&/\bMONTANT\s+T[IT]C\b/i.test(source);
  // French tills often append a VAT code after the euro sign. An OCR reader
  // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
  // glyphs on a receipt with independent French/euro footer evidence.
- const frenchEuro=/(?:Article\(s\)|TOTAL\s*\[\d{1,4}\]\s*Articles?\b|REDUCTIONS INMEDIATES|RESTE A PAYER|SOUS-TOTAL)/i.test(source)&&source.includes('€');
+ const frenchEuro=/(?:Article\(s\)|TOTAL\s*\[\d{1,4}\]\s*Articles?\b|TOTAL\s+[AÀ]\s+PAYER|REDUCTIONS INMEDIATES|RESTE A PAYER|SOUS-TOTAL)/i.test(source)&&source.includes('€');
  const lines=source.split(/\r?\n/).map(x=>{
   const trimmed=x.replace(/\u00a0/g,' ').trim();
   let repaired=frenchEuro?trimmed.replace(/(\d+[.,]\d{2})\s*[ct(46](?=\s+(?:\d+[.,]\d{2}|1[13]\b))/gi,'$1 €').replace(/(\d+[.,]\d{2})\s*\($/,'$1 €'):trimmed;
@@ -174,6 +175,14 @@ export function parseReceipt(text){
  for(const [lineIndex,originalLine] of lines.entries()){
   let line=originalLine;
   if(consumed.has(lineIndex))continue;
+  // Carrefour-style tills combine the sold-unit count, final amount and
+  // payment heading on one line. Everything after it is payment/tax detail.
+  if(rows.length&&printedReceiptCount(line)?.label==='Articles'&&splitPrice(line)){
+   finishRate(undefined,false);break;
+  }
+  // The first character before a starred label is the VAT class on this
+  // layout, not part of the product. Keep originalLine in raw evidence.
+  if(frenchVatColumn)line=line.replace(/^[A-Z0-9]\s+(?=\*)/i,'');
   if(printedReceiptCount(line)&&!splitPrice(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;continue;}
   // A one-character VAT code can sit between a product label and its
   // priced count line. Keep the label only when the next line proves its
@@ -243,7 +252,7 @@ export function parseReceipt(text){
   if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
   // French tills can print the amount due and contactless card charge before
   // the word TOTAL. These are payment records, never stock purchases.
-  if(/^(?:montant\s+d[uû]|cb\s+sans\s+contact)\b/i.test(line)){
+  if(/^(?:montant\s+d[uû]|cb\s+(?:emv\s+)?sans\s+contact)\b/i.test(line)){
    finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;
   }
   // A refundable till deposit contributes to the bill but is not stock.
@@ -396,7 +405,7 @@ export function auditReceipt(text,items=pantryReceipt(text)){
   }
   if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);
   else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);
-  const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|totale(?:\s+complessivo)?|summe)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line);
+  const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|totale(?:\s+complessivo)?|summe)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line)||printedReceiptCount(line)?.label==='Articles';
   if(p&&totalHeading&&!/^total\s+(?:discount|tax|vat|tva)\b/i.test(line)){
    const isSubtotal=/^(?:sub|sous)/i.test(line),amounts=line.match(/\d+[.,]\d{2}/g)||[];
    if(!isSubtotal||!footer.total&&amounts.length===1)footer[isSubtotal?'subtotal':'total']=p.amount;

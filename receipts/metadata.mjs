@@ -13,6 +13,10 @@ function oneEdit(a,b){
 }
 export function printedReceiptCount(line){
  if(typeof line!=='string'||line.length>160)return null;
+ const frenchPay=line.trim().match(/^(\d{1,4})\s+ARTICLE(?:S|\(S\))\s+TOTAL\s+[AÀ]\s+PAYER\b/i);
+ if(frenchPay)return {label:'Articles',value:frenchPay[1],printed:line,headingCorrected:false};
+ const frenchTotal=line.trim().match(/^TOTAL\s+(\d{1,4})\s+ARTICLES?\b/i);
+ if(frenchTotal)return {label:'Articles',value:frenchTotal[1],printed:line,headingCorrected:false};
  const german=line.trim().match(/^Posten\s*:\s*(\d{1,4})\s*$/i);
  if(german)return {label:'Posten',value:german[1],printed:line,headingCorrected:false};
  const french=line.trim().match(/^TOTAL\s*\[(\d{1,4})\]\s+Ar\s*ticles\b/i);

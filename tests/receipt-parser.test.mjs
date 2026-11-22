@@ -26,6 +26,34 @@ test('French amount due and contactless payment stay outside stock before total'
  assert.deepEqual(doc.audit.warnings,[]);
 });
 
+test('French VAT-column receipts keep product names and stop at a combined article and payment footer',()=>{
+ const lines=['FICTIONAL MARKET','TVA DESCRIPTION QTE X P.U. MONTANT TIC','6 *100G CHOCO NOIR 6.98€','2 X 3,49€','6 *1L BOISSON SOJA 1.98€','2 X 0,99€','6 *230G WASA FIBRES 1.89€','5 ARTICLE(S) TOTAL A PAYER 10.85€','CB EMV SANS CONTACT EUR 10,85€','Taux TVA Hors Taxe 5.50 1.66'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-vat.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.amount,item.packCount,item.qty,item.unit,item.section]),[
+  ['CHOCO NOIR','6.98',2,200,'g','kitchen'],
+  ['BOISSON SOJA','1.98',2,2,'L','kitchen'],
+  ['WASA FIBRES','1.89',1,230,'g','kitchen']
+ ]);
+ assert.match(doc.items[0].raw,/^6 \*100G/);
+ assert.equal(doc.audit.total,'10.85');
+ assert.equal(doc.audit.productCount,5);
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
+test('French department headings do not merge into products or send toiletries to Pantry',()=>{
+ const lines=['FICTIONAL MARKET','>> Eplcerie salee','SAMPLE PASTA 2.00','>> Parfumerie/Cosmetique','SAMPLE DEO SPRAY 4.53','>> Charcuterie LS','SAMPLE POULET 1.97','>> Economat','SAC KRAFT 0.15','Total 4 articles 8.65'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-departments.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.amount,item.section,Boolean(item.excludedFromPantry)]),[
+  ['SAMPLE PASTA','2.00','kitchen',false],
+  ['SAMPLE DEO SPRAY','4.53','household',false],
+  ['SAMPLE POULET','1.97','',true],
+  ['SAC KRAFT','0.15','household',false]
+ ]);
+ assert.equal(doc.audit.total,'8.65');
+ assert.equal(doc.audit.productCount,4);
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
 test('Italian till total and payment rows stay outside stock, with meat excluded',()=>{
  const lines=['TEST OLIVE 1,20','TEST POLLO 2,50','TEST GANBERETTI 3,00','TOTALE COMPLESSIVO 6,70','di cui IVA 0,40','Pagamento elettronico 6,70','Importo pagato 6,70'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-italian.jpg'},{ai:true});
