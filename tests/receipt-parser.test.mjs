@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('discounted till prices, deposit, printed units and OCR zero-g glyph reconcile separately',()=>{
+ const lines=['FICTIONAL MARKET','COLOMBIA COFFEE $16.93 F','Reg $21.99','Savings with Prime ($5.06)','SAMPLE 0G KMBCH $9.58 F','Qty 2 $4.79 ea','CRV SGL UNDER 240Z $0.20','Qty 2 $0.10 ea','SAMPLE ARTCHK QRTRS $1.74 F','Qty 2 $0.87 ea','Subtotal: $33.51','Total Savings: -$5.06','Net Sales: $28.45','Total: $28.45','5','Sold Items:'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-discounted.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.amount,item.qty,item.packCount,item.section]),[['COLOMBIA COFFEE','16.93',1,1,'kitchen'],['SAMPLE 0G KMBCH','9.58',2,2,'kitchen'],['SAMPLE ARTCHK QRTRS','1.74',2,2,'kitchen']]);
+ assert.equal(doc.audit.charges,'0.20');
+ assert.equal(doc.audit.netSum,'28.45');
+ assert.equal(doc.audit.subtotal,'33.51');
+ assert.equal(doc.audit.total,'28.45');
+ assert.equal(doc.audit.productCount,5);
+ assert.equal(doc.audit.pricingBasis,'discounted-line-prices');
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
 test('French amount due and contactless payment stay outside stock before total',()=>{
  const lines=['MARCHE EXEMPLE','PAIN DE MIE SEIGL 2.05 EUR A','SAMPLE COFFEE 6.71 EUR A','MONTANT DU 8,76 EUR','CB SANS CONTACT 8.76 EUR',"Nombre d'articles vendus= 2",'TOTAL ELIGIBLE TRD 8.76 EUR'];
  const doc=documentFrom([{lines,native:true}],{name:'fictional-french.jpg'},{ai:true});
@@ -193,12 +206,13 @@ test('Costco item codes, OCR O/0, discounts and product types survive a whole re
  ];
  const doc=documentFrom([{lines,native:true}], 'synthetic-costco', {ai:true});
  assert.deepEqual(doc.items.map(({name,qty,unit,section,itemNumber})=>({name,qty,unit,section,itemNumber})),[
-  {name:'XL EGGS',qty:1,unit:'pcs',section:'kitchen',itemNumber:'430'},
+  {name:'XL EGGS',qty:1,unit:'pcs',section:'',itemNumber:'430'},
   {name:'Organic milk 2%',qty:4,unit:'L',section:'kitchen',itemNumber:'1346909'},
   {name:'Energy drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2919781'},
   {name:'Sports drink',qty:1,unit:'pcs',section:'kitchen',itemNumber:'2908438'},
  ]);
  assert.deepEqual(doc.items.map(item=>item.amount),['9.00','10.00','25.00','30.00']);
+ assert.equal(doc.items[0].excludedFromPantry,true);
  assert.equal(doc.items[2].receiptName,'Z0A');
  assert.equal(doc.audit.packCount,4);
  assert.equal(doc.audit.netSum,'70.00');
@@ -211,8 +225,9 @@ test('a priced count line before its label belongs to the following purchase',()
  const doc=documentFrom([{lines,native:true}], 'synthetic-forward-rate', {ai:true});
  assert.deepEqual(doc.items.map(({name,amount,qty,unit,section})=>({name,amount,qty,unit,section})),[
   {name:'Organic milk 2%',amount:'10.29',qty:4,unit:'L',section:'kitchen'},
-  {name:'XL EGGS',amount:'19.38',qty:2,unit:'pcs',section:'kitchen'},
+  {name:'XL EGGS',amount:'19.38',qty:2,unit:'pcs',section:''},
  ]);
+ assert.equal(doc.items[1].excludedFromPantry,true);
  assert.equal(doc.audit.packCount,3);
  assert.deepEqual(doc.warnings,[]);
 });

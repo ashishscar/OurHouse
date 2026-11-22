@@ -4,7 +4,7 @@ const currency=String.raw`(?:C\$|CA\$|US\$|\$|₹|£|€|Rs\.?)`;
 const decimal=String.raw`(?:\d{1,3}(?:[ ,]\d{3})+|\d+)\s*[.,]\s*\d{2}`;
 const priceEnd=new RegExp(String.raw`(?:^|\s|\.{2,})(?:\*\s*)?(${currency}\s*)?(?:\*\s*)?(${decimal}|\d+\s*${currency})\.?(?:\s*(?:CAD|USD|INR|GBP|EUR|€|£|₹))?\s*(?:[A-Z*×]{1,4}[\d\[\]]{0,2}|\d{1,2}|[\u3400-\u9fff])?$`,'i');
 const bareCurrencyEnd=new RegExp(String.raw`(?:^|\s)(${currency})\s*(\d+)(?:\s*[A-Z*]{1,3})?$`,'i');
-const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|totale(?:\s+complessivo)?|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|iva|di\s+cui\s+iva|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|pagamento|importo\s+pagato|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price|posten|summe|ec[\s-]*cash|betrag|mwst)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat|iva)\b|\d{2}-[A-Z]|www\.|https?:)/i;
+const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|totale(?:\s+complessivo)?|tot\.?\s*rounded|tax(?:es)?|hst|gst|pst|qst|vat|iva|di\s+cui\s+iva|cash|change|visa|mastercard|amex|debit|credit|card|balance|thank|receipt|store|tel(?:ephone)?|phone|invoice|qty|quantity|item(?:s)?|amount|discount|savings|coupon|member(?:ship)?|points|in[-\s]*st[ou]re\s+offers|date|time|payment|pagamento|importo\s+pagato|tender|auth|terminal|transaction|register|cashier|rounding|refund|return|number\s+of\s+(?:products|items)|bob\s+count|special\s+sale|regular\s+price|reg(?=\s+[$₹£€])|posten|summe|ec[\s-]*cash|betrag|mwst)\b|you(?:r)?\s+(?:saved|discount|price\s+matched)\b|points\s+earned\b|\d{1,2}(?:\.\d+)?%\s*(?:hst|gst|pst|qst|vat|iva)\b|\d{2}-[A-Z]|www\.|https?:)/i;
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
@@ -76,7 +76,7 @@ function printedDepartment(line){
  return family?['MEATS','LIQUOR'].includes(family)?'exclude':['HOME','HOUSEHOLD','CLEANING'].includes(family)?'household':'kitchen':'';
 }
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
-function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand)\s*$/i.test(priced.body)?priced.amount:null;}
+function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand|crv\s+sgl\s+(?:under\s+\d{2,4}z|\d{2,4}z\s+and\s+up))\s*$/i.test(priced.body)?priced.amount:null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
  const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|#-]+[A-Z]?)\s+(?=[A-Z])/i);
@@ -102,7 +102,7 @@ function quantity(body){
  const candidateWeight=multi?null:name.match(measurement);
  // POS item codes can precede a store prefix such as "PC". The code is an
  // identifier, not a count of pieces, even though "pc" is also a unit.
- const weight=candidateWeight?.index===0&&itemNumber&&candidateWeight[1]===itemNumber?null:candidateWeight;
+ const weight=candidateWeight&&(num(candidateWeight[1])<=0||candidateWeight.index===0&&itemNumber&&candidateWeight[1]===itemNumber)?null:candidateWeight;
  if(multi){count*=Number(multi[1]);known=true;}
  const packageUnit=u=>/^(?:pk|packs?|packets?)$/i.test(u||'');
  let value={qty:count,unit:'pcs'};if(weight){value=packageUnit(weight[2])?{qty:count,unit:'packet'}:measured(num(weight[1])*count,weight[2]);name=name.replace(weight[0],' ').trim();known=true;}
@@ -253,6 +253,13 @@ export function parseReceipt(text){
    if(rate&&Math.abs(num(rate[1])*num(rate[3])-Number(next.amount))<=.03)consumed.add(lineIndex+1);
    finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;
   }
+  // The amount is already on the product line; this till's following count
+  // is stock evidence only when count × unit price equals that same amount.
+  const tillQty=line.match(/^Qty\s+(\d{1,3})\s+[$₹£€]?(\d+[.,]\d{2})\s+ea\.?$/i);
+  if(tillQty){
+   if(last&&Math.abs(num(tillQty[1])*num(tillQty[2])-Number(last.amount))<.005){applyRate(last,[null,tillQty[1],undefined,tillQty[2]]);last.raw+='\n'+line;}
+   continue;
+  }
   const discount=discountPrice(line),positive=discount&&line.replace(/\s*-\s*[$₹£€]?\s*\d+[.,]\d{2}(?:\s*[A-Z*]{1,3})?\s*$/i,'').match(ratePattern);
   // A coupon may be printed between a product and its count/rate. Hold a
   // candidate only across explicit discount metadata, then compare both nearby
@@ -400,16 +407,21 @@ export function auditReceipt(text,items=pantryReceipt(text)){
   const partial=line.match(/\bbob\s+count\s*[:=]?\s*(\d{1,4})\b/i);
   if(partial)footer.partialBasketCount=Number(partial[1]);
  }
- if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*number\s+of\s+items\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
+ if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*(?:number\s+of\s+items|sold\s+items)\s*:?\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
- const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0),target=footer.subtotal||footer.total;
+ const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0);
  const netSum=rounded(itemSum+charges-discounts);
- if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
+ // Some tills print original list prices as subtotal and already-discounted
+ // product prices as line totals. Accept the latter only when they reconcile
+ // to a separately printed final total; keep the gross subtotal visible.
+ const discountedLinePrices=footer.total&&footer.subtotal&&Math.abs(Number(footer.total)-netSum)<=.02&&Math.abs(Number(footer.subtotal)-netSum)>.02;
+ const target=discountedLinePrices?footer.total:footer.subtotal||footer.total;
+ if(target&&Math.abs(Number(target)-netSum)>.02)warnings.push('The extracted product amounts after discounts do not match the printed '+(target===footer.subtotal?'subtotal':'total')+'. Check for missing lines, discounts or tax.');
  // German "Posten" counts a separately priced refundable deposit as a till
  // position. Keep the printed count, but compare it with products plus that
  // charge position so a complete basket does not trigger a false warning.
  const countedPositions=packCount+(footer.productCountEvidence?.label==='Posten'?depositPositions:0);
  if(footer.productCount&&countedPositions!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+countedPositions+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
  if(items.some(item=>item.warning))warnings.push('Some products need review. Check the flagged items against the photo before adding them.');
- return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...(footer.productCountEvidence?.label==='Posten'?{tillPositions:countedPositions}:{}),...footer,warnings};
+ return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...(discountedLinePrices?{pricingBasis:'discounted-line-prices'}:{}),...(footer.productCountEvidence?.label==='Posten'?{tillPositions:countedPositions}:{}),...footer,warnings};
 }
