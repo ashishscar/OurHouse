@@ -17,6 +17,8 @@ export function printedReceiptCount(line){
  if(german)return {label:'Posten',value:german[1],printed:line,headingCorrected:false};
  const french=line.trim().match(/^TOTAL\s*\[(\d{1,4})\]\s+Ar\s*ticles\b/i);
  if(french)return {label:'Total articles',value:french[1],printed:line,headingCorrected:false};
+ const frenchSold=line.trim().match(/^Nombre\s+d['’]articles\s+vendus\s*[:=]\s*(\d{1,4})\s*$/i);
+ if(frenchSold)return {label:'Articles vendus',value:frenchSold[1],printed:line,headingCorrected:false};
  const frenchOrder=line.trim().match(/^D[eé]tail\s+de\s+votre\s+commande\b.*\((\d{1,4})\s+produits?\)\s*$/i);
  if(frenchOrder)return {label:'Order products',value:frenchOrder[1],printed:line,headingCorrected:false};
  let m=line.trim().match(/^([a-z]{5,7})\s+of\s+(products|items)\s*[:=]?\s*(\d{1,4})\s*$/i);

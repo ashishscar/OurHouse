@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('French amount due and contactless payment stay outside stock before total',()=>{
+ const lines=['MARCHE EXEMPLE','PAIN DE MIE SEIGL 2.05 EUR A','SAMPLE COFFEE 6.71 EUR A','MONTANT DU 8,76 EUR','CB SANS CONTACT 8.76 EUR',"Nombre d'articles vendus= 2",'TOTAL ELIGIBLE TRD 8.76 EUR'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.amount,item.section]),[['PAIN DE MIE SEIGL','2.05','kitchen'],['SAMPLE COFFEE','6.71','kitchen']]);
+ assert.equal(doc.audit.total,'8.76');
+ assert.equal(doc.audit.netSum,'8.76');
+ assert.equal(doc.audit.productCount,2);
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
 test('Italian till total and payment rows stay outside stock, with meat excluded',()=>{
  const lines=['TEST OLIVE 1,20','TEST POLLO 2,50','TEST GANBERETTI 3,00','TOTALE COMPLESSIVO 6,70','di cui IVA 0,40','Pagamento elettronico 6,70','Importo pagato 6,70'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-italian.jpg'},{ai:true});

@@ -241,6 +241,11 @@ export function parseReceipt(text){
    last.warning='The printed weight × unit price does not match this product amount. Enter the stock weight from the photo before selecting it.';last.unmatchedQuantity=line;continue;
   }
   if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
+  // French tills can print the amount due and contactless card charge before
+  // the word TOTAL. These are payment records, never stock purchases.
+  if(/^(?:montant\s+d[uû]|cb\s+sans\s+contact)\b/i.test(line)){
+   finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;
+  }
   // A refundable till deposit contributes to the bill but is not stock.
   if(separateDeposit(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   if(/^(?:bottle\s+)?deposit\s+\d{1,3}$/i.test(line)){
