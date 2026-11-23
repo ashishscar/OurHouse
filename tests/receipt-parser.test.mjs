@@ -54,6 +54,32 @@ test('French department headings do not merge into products or send toiletries t
  assert.deepEqual(doc.audit.warnings,[]);
 });
 
+test('French unit-price tables keep line totals, weighed stock and printed line counts',()=>{
+ const lines=['EXAMPLE MARKET','2.55€ UNRELATED SIDE PRINT 2.75','Ticket de vente','Article Q P:U.CUR-Dte EUR',
+  'BEURRE DOUX 1,80 1 1,80 A T','07€ TOMATE RONDE 0,90 A T','70€ 0,300 kg X 3,00 EUR/kg',
+  'AVOCAT 0,75 3 2,25 AT','FILET DE CANARD 4,20 1 4,20 A T','MAQUEREAUX VIN BLANC 1,00 1 1,00 AT',
+  'Nombre de lignes: 5','Total 10,15','Cash 10,15'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-french-table.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(row=>[row.receiptName,row.amount,row.qty,row.unit,row.section,Boolean(row.excludedFromPantry)]),[
+  ['BEURRE DOUX','1.80',1,'pcs','kitchen',false],
+  ['TOMATE RONDE','0.90',0.3,'kg','kitchen',false],
+  ['AVOCAT','2.25',3,'pcs','kitchen',false],
+  ['FILET DE CANARD','4.20',1,'pcs','',true],
+  ['MAQUEREAUX VIN BLANC','1.00',1,'pcs','',true]
+ ]);
+ assert.equal(doc.audit.lineCount,5);
+ assert.equal(doc.audit.total,'10.15');
+ assert.deepEqual(doc.audit.warnings,[]);
+});
+
+test('French table OCR repair keeps damaged amount visible for review',()=>{
+ const text='EXAMPLE MARKET\nTicket de vente\nArticle Q P:U.CUR-Dte EUR\nAVOCAT 1,00 1 T1,00 A T\nNombre de lignes: 1\nTotal 11,00';
+ const rows=parseReceipt(text),audit=auditReceipt(text,rows);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[['AVOCAT','11.00']]);
+ assert.match(rows[0].warning,/damaged leading digit/i);
+ assert.match(audit.warnings.join(' '),/need review/i);
+});
+
 test('Italian till total and payment rows stay outside stock, with meat excluded',()=>{
  const lines=['TEST OLIVE 1,20','TEST POLLO 2,50','TEST GANBERETTI 3,00','TOTALE COMPLESSIVO 6,70','di cui IVA 0,40','Pagamento elettronico 6,70','Importo pagato 6,70'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-italian.jpg'},{ai:true});

@@ -15,6 +15,23 @@ const rounded=n=>Math.round(n*1e6)/1e6;
 function measured(q,u){u=u.toLowerCase();return {qty:rounded(q*(u==='lb'||u==='lbs'?0.45359237:u==='oz'?28.349523125:1)),unit:unitMap[u]||'pcs'};}
 function amount(value){const s=value.replace(/[^\d.,]/g,'');const i=Math.max(s.lastIndexOf('.'),s.lastIndexOf(','));return i<0?s+'.00':s.slice(0,i).replace(/[.,]/g,'')+'.'+s.slice(i+1);}
 function splitPrice(line){const m=line.match(priceEnd)||line.match(bareCurrencyEnd);if(!m)return null;return {body:line.slice(0,m.index).trim(),amount:amount(m[2])};}
+function frenchTableProduct(line){
+ // Article / unit-price / quantity / line-total / tax-code tills put several
+ // numbers on one physical row. The rightmost observed amount is the purchase
+ // price. A damaged leading 1 in that amount remains flagged for review.
+ const clean=line.replace(/\s+A\s*T\s*$/i,'').replace(/\s+AT\s*$/i,'').trim();
+ const match=clean.match(/^(.+\p{L}.*?)\s+([TIl]?\d+[.,]\d{2})$/u);
+ if(!match)return null;
+ const glyph=/^[TIl]/.test(match[2]);
+ const price=amount(glyph?'1'+match[2].slice(1):match[2]);
+ let label=match[1],count=1;
+ const columns=label.match(/^(.+\p{L}.*?)\s+(\d+[.,]\d{2}|\d{3})\s+(\d{1,3})>?$/u);
+ if(columns){label=columns[1];const candidate=Number(columns[3]),unit=columns[2].includes(',')||columns[2].includes('.')?num(columns[2]):Number(columns[2])/100;
+  if(candidate>1&&Math.abs(candidate*unit-Number(price))<.005)count=candidate;
+ }
+ if(!validName(quantity(label).name,true))return null;
+ return {label,price,count,glyph};
+}
 function repairReconciledRateGlyph(line,knownTotal=null){
  // OCR can read a currency glyph as "s". Correct only a rate whose separate
  // line total proves the intended quantity and unit price in exact cents.
@@ -141,6 +158,7 @@ export function parseReceipt(text){
  // one- or two-character code is not part of the product's printed name.
  const italianTaxColumn=/DESCRIZI(?:ONE|OME)/i.test(source)&&/IVA\s+PREZZ[O0]/i.test(source);
  const frenchVatColumn=/\bTVA\s+DESCRIPTION\s+QTE\b/i.test(source)&&/\bMONTANT\s+T[IT]C\b/i.test(source);
+ const frenchTable=/^Article\b.*\bEUR\b/im.test(source)&&/(?:Ticket\s+de\s+vente|P[:.]?U)/i.test(source);
  // French tills often append a VAT code after the euro sign. An OCR reader
  // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
  // glyphs on a receipt with independent French/euro footer evidence.
@@ -157,7 +175,7 @@ export function parseReceipt(text){
   if(frenchEuro&&/^\d{1,3}\s*[x×]\s*\d+[.,]\d{2}\s*[ct(46]$/i.test(repaired))repaired=repaired.replace(/[ct(46]$/i,'€');
   return repairReconciledRateGlyph(repaired);
  }).filter(Boolean),rows=[];
- let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='';const consumed=new Set();
+ let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='',frenchTableActive=false;const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
  function finishRate(next,allowPrevious=true){
@@ -175,6 +193,24 @@ export function parseReceipt(text){
  for(const [lineIndex,originalLine] of lines.entries()){
   let line=originalLine;
   if(consumed.has(lineIndex))continue;
+  if(frenchTable){
+   if(/^Article\b.*\bEUR\b/i.test(line)){frenchTableActive=true;pending=null;pendingDraft=null;last=null;continue;}
+   if(!frenchTableActive)continue;
+   if(/^Nombre\s+de\s+lignes\s*:\s*\d{1,4}\s*$/i.test(line)){finishRate(undefined,false);break;}
+   // A second receipt beside the paper can create an unrelated price at the
+   // extreme left of an otherwise intact row. Accept only a standalone amount
+   // before a named product or the following weighed-quantity line.
+   line=line.replace(/^\d{1,3}(?:[.,]\d{2})?\s*€\s+(?=\p{L}|\d+[.,]\d{1,3}\s*(?:kg|g|lb)\b)/iu,'');
+   const weighed=line.match(/^\s*(\d+[.,]\d{1,3})\s*(kg|g|lb)\s*[x×]\s*(\d+[.,]\d{2})\s*EUR\s*\/\s*(?:kg|g|lb)\s*$/i);
+   if(weighed&&last&&Math.abs(num(weighed[1])*num(weighed[3])-Number(last.amount))<.015){applyRate(last,[null,weighed[1],weighed[2],weighed[3]]);last.raw+='\n'+originalLine;continue;}
+   const table=frenchTableProduct(line);
+   if(table){
+    const row={...quantity(table.label),amount:table.price,raw:originalLine};
+    if(table.count>1){row.packCount=table.count;if(row.packSize){Object.assign(row,measured(row.packSize*table.count,row.packUnit));row.quantityDetail=table.count+' packs × '+row.packSize+' '+row.packUnit;}else{row.qty=table.count;row.unit='pcs';row.quantityDetail=table.count+' items';}row.quantityKnown=true;}
+    if(table.glyph)row.warning='A damaged leading digit in the printed amount was read as 1. Check the photo before selecting this product.';
+    add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;continue;
+   }
+  }
   // Carrefour-style tills combine the sold-unit count, final amount and
   // payment heading on one line. Everything after it is payment/tax detail.
   if(rows.length&&printedReceiptCount(line)?.label==='Articles'&&splitPrice(line)){
@@ -395,6 +431,8 @@ export function auditReceipt(text,items=pantryReceipt(text)){
  const lines=String(text).split(/\r?\n/),footer={},warnings=[];let discounts=0,charges=0,depositPositions=0,purchaseDone=false;
  for(const [index,raw] of lines.entries()){
   const line=raw.replace(/^[*\s]+/,''),p=splitPrice(line),discount=discountPrice(line);
+  const printedLines=line.match(/^Nombre\s+de\s+lignes\s*:\s*(\d{1,4})\s*$/i);
+  if(printedLines)footer.lineCount=Number(printedLines[1]);
   if(!purchaseDone){
    const deposit=separateDeposit(line);
    if(deposit){charges+=Number(deposit);depositPositions++;}
@@ -431,6 +469,7 @@ export function auditReceipt(text,items=pantryReceipt(text)){
  // charge position so a complete basket does not trigger a false warning.
  const countedPositions=packCount+(footer.productCountEvidence?.label==='Posten'?depositPositions:0);
  if(footer.productCount&&countedPositions!==footer.productCount)warnings.push('The receipt prints '+footer.productCount+' purchased units; '+countedPositions+' units were read across '+items.length+' product lines. Review missing or repeated lines.');
+ if(footer.lineCount&&items.length!==footer.lineCount)warnings.push('The receipt prints '+footer.lineCount+' product lines; '+items.length+' lines were read. Review missing or repeated lines.');
  if(items.some(item=>item.warning))warnings.push('Some products need review. Check the flagged items against the photo before adding them.');
  return {itemSum:itemSum.toFixed(2),charges:charges.toFixed(2),discounts:discounts.toFixed(2),netSum:netSum.toFixed(2),packCount,...(discountedLinePrices?{pricingBasis:'discounted-line-prices'}:{}),...(footer.productCountEvidence?.label==='Posten'?{tillPositions:countedPositions}:{}),...footer,warnings};
 }
