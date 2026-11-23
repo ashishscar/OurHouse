@@ -157,7 +157,11 @@ export function parseReceipt(text){
  // The explicit IVA/PREZZO headers identify a separate VAT column. Its
  // one- or two-character code is not part of the product's printed name.
  const italianTaxColumn=/DESCRIZI(?:ONE|OME)/i.test(source)&&/IVA\s+PREZZ[O0]/i.test(source);
- const frenchVatColumn=/\bTVA\s+DESCRIPTION\s+QTE\b/i.test(source)&&/\bMONTANT\s+T[IT]C\b/i.test(source);
+ const frenchVatCodedRows=source.split(/\r?\n/).filter(line=>/^[67]\s+(?![x×@]\b)(?=.*\p{L})(?=.*\d+[.,]\d{2}\s*€\s*$)/iu.test(line)).length;
+ // A vision reader may omit the table heading while keeping the footer and
+ // one-digit VAT codes before every purchase. Require repeated coded rows
+ // and that shop's distinctive footer before treating the digits as columns.
+ const frenchVatColumn=/\bTVA\s+DESCRIPTION\s+QTE\b/i.test(source)&&/\bMONTANT\s+T[IT]C\b/i.test(source)||frenchVatCodedRows>=3&&/\bTOTAL\s+ALIMENTAIRE\b/i.test(source)&&/\b\d+\s+ARTICLE\(S\)/i.test(source);
  const frenchTable=/^Article\b.*\bEUR\b/im.test(source)&&/(?:Ticket\s+de\s+vente|P[:.]?U)/i.test(source);
  // French tills often append a VAT code after the euro sign. An OCR reader
  // can turn that sign into (, c, t, 4, or 6. Repair only decimal-adjacent
@@ -218,7 +222,7 @@ export function parseReceipt(text){
   }
   // The first character before a starred label is the VAT class on this
   // layout, not part of the product. Keep originalLine in raw evidence.
-  if(frenchVatColumn)line=line.replace(/^[A-Z0-9]\s+(?=\*)/i,'');
+  if(frenchVatColumn)line=line.replace(/^[67]\s+(?=(?![x×@]\b)(?=.*\p{L})(?=.*\d+[.,]\d{2}\s*€\s*$))/iu,'').replace(/^[A-Z0-9]\s+(?=\*)/i,'');
   if(printedReceiptCount(line)&&!splitPrice(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;continue;}
   // A one-character VAT code can sit between a product label and its
   // priced count line. Keep the label only when the next line proves its

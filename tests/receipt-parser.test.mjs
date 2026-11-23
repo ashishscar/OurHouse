@@ -527,6 +527,18 @@ test('tax codes and each-price rows stay metadata, and sale notices never become
  assert.equal(rows[2].amount,'0.35');
 });
 
+test('repeated French VAT digits are removed from product names when the heading was missed',()=>{
+ const text='6 *1356 CHIPS VINAIG 2.58€\n2 x 1.29€\n7 75BBOX AOC RG BLAIS 4.49€\n6 *EXCEL.NOIR FRAMBOI 2.55€\n6 *FLTS DE MAQ. UB AR 2.75€\nTOTAL ALIMENTAIRE 12.37€\n5 ARTICLE(S)';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[
+  ['CHIPS VINAIG','2.58'],['75BBOX AOC RG BLAIS','4.49'],
+  ['EXCEL.NOIR FRAMBOI','2.55'],['FLTS DE MAQ. UB AR','2.75']
+ ]);
+ assert.equal(rows[0].packCount,2);
+ assert.equal(rows[0].raw.startsWith('6 *1356 CHIPS VINAIG'),true);
+ assert.equal(parseReceipt('7 75BBOX AOC RG BLAIS 4.49€')[0].name,'7 75BBOX AOC RG BLAIS');
+});
+
 test('a printed per-one-unit rate does not discard the actual purchased weight',()=>{
  const rows=parseReceipt('PAPAYA(LB) $8.12\n3.26 lb @ $2.49 per 1 lb\nGINGER $2.79\n1 kg @ $2.79 per 1 kg');
  assert.equal(rows[0].qty,1.478711);assert.equal(rows[0].unit,'kg');assert.equal(rows[0].quantityKnown,true);assert.equal(rows[1].qty,1);assert.equal(rows[1].unit,'kg');
