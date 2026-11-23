@@ -33,6 +33,17 @@ test('French fish and meat labels remain excluded while vegetarian labels can en
  assert.equal(qualifiedReceiptName('Legumes','TEST BOUILL LEGUMES'),'Bouill Legumes');
  assert.equal(qualifiedReceiptName('Bouill','TEST BOUILL LEGUMES'),'');
 });
+test('verified abbreviated French chocolate is food while mackerel and red wine stay excluded',()=>{
+ const rows=['EXCEL.NOIR FRAMBOI','75BDX AOC RG BLAIS','FLTS DE MAQ. VB-AR','AOC UNKNOWN','EXCEL UNKNOWN'].map((name,index)=>({name,raw:name+' '+(index+1)+'.00 EUR',amount:(index+1)+'.00',qty:1,unit:'pcs'}));
+ const named=identifyReceiptItems(rows,[],'EXAMPLE MARKET');
+ assert.deepEqual(named.map(row=>[row.receiptName,row.section,Boolean(row.excludedFromPantry)]),[
+  ['EXCEL.NOIR FRAMBOI','kitchen',false],
+  ['75BDX AOC RG BLAIS','',true],
+  ['FLTS DE MAQ. VB-AR','',true],
+  ['AOC UNKNOWN','',false],
+  ['EXCEL UNKNOWN','',false]
+ ]);
+});
 test('French receipt departments and literal OCR rate lines keep food, wine and household separate',()=>{
  const text='CHAMPAGNES MOUSSEUX\n12.00 € 13\nSAMPLE CUVEE 75CL\n2 X 6.00 UF\nCONDIMENTS-SAUCES FROIDES\nOLIVES 3.00 € 11\n1 X 3.00 EUR\nMOBILIER\nCINTRE 2.00 € 13\n1 X 2.00 EUR\nVINS AOC\nSAMPLE BOTTLE RG 75CL 9.00 € 13\n1 X 9.00 EUR\nTOTL [5] Articles 26.00 €\nSOUS-TOTAL 22.00 € 4.00 B\nTOTAL TVA 4.00 B';
  const items=identifyReceiptItems(parseReceipt(text),[],text);
