@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('damaged total heading stops footer and a damaged unit digit uses count and line total',()=>{
+ const lines=['EXAMPLE MARKET','APPLES 1,00','BANANAS 1,00','POTATOES 1,00','CARROTS 1,00','ORANGES 1,00',
+  '70G SAMPLE CHO COOKIE','4 X 1,$9 5,56','REDUCTION -1,00','TOTA(AL 10,56','TOTA(AL 9,56'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-damaged-footer.jpg'},{ai:true});
+ assert.equal(doc.items.length,6);
+ assert.equal(doc.items.at(-1).amount,'5.56');
+ assert.equal(doc.items.at(-1).packCount,4);
+ assert.match(doc.items.at(-1).warning,/unreadable digit/i);
+ assert.equal(doc.audit.subtotal,'10.56');
+ assert.equal(doc.audit.total,'9.56');
+ assert.equal(doc.audit.netSum,'9.56');
+ assert.equal(doc.audit.packCount,9);
+ assert.equal(doc.items.some(item=>/TOTA|PROMO/.test(item.receiptName)),false);
+});
+
 test('discounted till prices, deposit, printed units and OCR zero-g glyph reconcile separately',()=>{
  const lines=['FICTIONAL MARKET','COLOMBIA COFFEE $16.93 F','Reg $21.99','Savings with Prime ($5.06)','SAMPLE 0G KMBCH $9.58 F','Qty 2 $4.79 ea','CRV SGL UNDER 240Z $0.20','Qty 2 $0.10 ea','SAMPLE ARTCHK QRTRS $1.74 F','Qty 2 $0.87 ea','Subtotal: $33.51','Total Savings: -$5.06','Net Sales: $28.45','Total: $28.45','5','Sold Items:'];
  const doc=documentFrom([{lines,native:true}],{name:'fictional-discounted.jpg'},{ai:true});

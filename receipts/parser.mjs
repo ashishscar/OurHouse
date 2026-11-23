@@ -15,6 +15,15 @@ const rounded=n=>Math.round(n*1e6)/1e6;
 function measured(q,u){u=u.toLowerCase();return {qty:rounded(q*(u==='lb'||u==='lbs'?0.45359237:u==='oz'?28.349523125:1)),unit:unitMap[u]||'pcs'};}
 function amount(value){const s=value.replace(/[^\d.,]/g,'');const i=Math.max(s.lastIndexOf('.'),s.lastIndexOf(','));return i<0?s+'.00':s.slice(0,i).replace(/[.,]/g,'')+'.'+s.slice(i+1);}
 function splitPrice(line){const m=line.match(priceEnd)||line.match(bareCurrencyEnd);if(!m)return null;return {body:line.slice(0,m.index).trim(),amount:amount(m[2])};}
+function damagedTotalHeading(line){
+ const priced=splitPrice(line),word=priced?.body.replace(/[^A-Za-z0-9]/g,'').toUpperCase().replaceAll('0','O');
+ if(!word||word.length<4||word.length>6||!word.startsWith('TOT')||/\s/.test(priced.body))return false;
+ const target='TOTAL';let prior=Array.from({length:target.length+1},(_,i)=>i);
+ for(let i=1;i<=word.length;i++){
+  const next=[i];for(let j=1;j<=target.length;j++)next[j]=Math.min(next[j-1]+1,prior[j]+1,prior[j-1]+Number(word[i-1]!==target[j-1]));prior=next;
+ }
+ return prior[target.length]===1;
+}
 function frenchTableProduct(line){
  // Article / unit-price / quantity / line-total / tax-code tills put several
  // numbers on one physical row. The rightmost observed amount is the purchase
@@ -289,7 +298,7 @@ export function parseReceipt(text){
    if(repaired){applyRate(last,[null,String(count),weighedRate[2],repaired]);last.raw+='\n'+line;last.rateCorrection={read:weighedRate[3],reconciled:repaired};last.warning='The OCR unit price was reconciled with the printed weight and item amount. Check the photo before selecting it.';continue;}
    last.warning='The printed weight × unit price does not match this product amount. Enter the stock weight from the photo before selecting it.';last.unmatchedQuantity=line;continue;
   }
-  if(rows.length&&/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line))break;
+  if(rows.length&&(/^(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|summe)\b/i.test(line.replace(/^[*\s]+/,''))&&splitPrice(line)||rows.length>=5&&damagedTotalHeading(line)))break;
   // French tills can print the amount due and contactless card charge before
   // the word TOTAL. These are payment records, never stock purchases.
   if(/^(?:montant\s+d[uû]|cb\s+(?:emv\s+)?sans\s+contact)\b/i.test(line)){
@@ -321,6 +330,20 @@ export function parseReceipt(text){
   }
   if(positive){if(last){applyRate(last,positive);last.raw+='\n'+line;}continue;}
   const priced=splitPrice(line),body=priced?.body??line;
+  // A damaged digit in a printed unit price can be recovered only when the
+  // adjacent count and separate line total prove the exact cents. Keep the
+  // original read and flag the item for review.
+  const obscuredRate=priced&&pending&&body.match(/^(\d{1,3})\s*[@x×]\s*(\d+[.,][\d$€?]{2})$/i);
+  if(obscuredRate){
+   const count=Number(obscuredRate[1]),cents=Math.round(Number(priced.amount)*100),
+    implied=count>1&&cents%count===0?(cents/count/100).toFixed(2):null,
+    observed=obscuredRate[2].replace(',','.');
+   if(implied&&observed.length===implied.length&&[...observed].filter((c,i)=>c!==implied[i]).length===1&&
+      [...observed].every((c,i)=>c===implied[i]||/[$€?]/.test(c))){
+    const row={...(pendingDraft||quantity(pending)),amount:priced.amount,raw:pending+'\n'+line};
+    if(validName(row.name)){applyRate(row,[null,String(count),undefined,implied]);row.warning='The OCR unit price has an unreadable digit; the printed count and line total were used to reconcile it. Check the photo before selecting this product.';add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;continue;}
+   }
+  }
   // Some tills print a multi-buy as "3 @3/$6.97". The 6.97 is the
   // combined price for three units, not the unit price. Bind it only when a
   // pending product, printed count and separate line total all agree.
@@ -447,9 +470,10 @@ export function auditReceipt(text,items=pantryReceipt(text)){
   }
   if(!purchaseDone&&/^(?:your\s+discount|instant\s+savings)\b/i.test(line)&&p&&!discount)discounts+=Number(p.amount);
   else if(discount&&!purchaseDone&&!/^(?:cash|change|visa|credit|debit|payment|balance|tax|remaining)\b/i.test(line))discounts+=Number(discount);
-  const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|totale(?:\s+complessivo)?|summe)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line)||printedReceiptCount(line)?.label==='Articles';
+  const totalHeading=/^\s*(?:sub[\s-]*total|sous[\s-]*total|grand\s*total|total|totale(?:\s+complessivo)?|summe)\b/i.test(line)||/^\s*TOTL\s*\[\d+\]\s*Articles?\b/i.test(line)||printedReceiptCount(line)?.label==='Articles'||damagedTotalHeading(line);
   if(p&&totalHeading&&!/^total\s+(?:discount|tax|vat|tva)\b/i.test(line)){
    const isSubtotal=/^(?:sub|sous)/i.test(line),amounts=line.match(/\d+[.,]\d{2}/g)||[];
+   if(!isSubtotal&&footer.total&&footer.total!==p.amount&&!footer.subtotal)footer.subtotal=footer.total;
    if(!isSubtotal||!footer.total&&amounts.length===1)footer[isSubtotal?'subtotal':'total']=p.amount;
    purchaseDone=true;
   }
