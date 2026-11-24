@@ -73,7 +73,7 @@ function printedDepartment(line){
  // whole heading (allowing two OCR edits on longer labels), never a product
  // substring, so a wrapped product cannot silently change departments.
  const compact=line.normalize('NFD').replace(/\p{M}/gu,'').toUpperCase().replace(/[^A-Z]/g,'');
- const orderTable={LAITIEROEUFSVEGETAL:'kitchen',CHARCUTERIETRAITEUR:'exclude',CHARCUTERIELS:'exclude',TRAITEURLS:'unknown',SURGELES:'unknown',EPICERIESALEE:'kitchen',EPICERIESUCREE:'kitchen',BOISSONS:'kitchen',HYGIENEBEAUTE:'household',PARFUMERIECOSMETIQUE:'household',ECOVILLAGE:'unknown',ECONOMAT:'household'};
+ const orderTable={LAITIEROEUFSVEGETAL:'kitchen',CHARCUTERIETRAITEUR:'exclude',CHARCUTERIELS:'exclude',TRAITEURLS:'unknown',SURGELES:'unknown',EPICERIESALEE:'kitchen',EPICERIESUCREE:'kitchen',BOISSONS:'kitchen',HYGIENEBEAUTE:'household',PARFUMERIECOSMETIQUE:'household',ECOVILLAGE:'unknown',ECONOMAT:'household',BISCUITSSUCRES:'kitchen',CEREALESETPOUDRESCHOCOLAT:'kitchen',PANIFICATION:'kitchen',PAMIFICATION:'kitchen',OEUFS:'exclude'};
  if(orderTable[compact])return orderTable[compact];
  if(/^E[NM]TRETIEN$/.test(compact))return 'household';
  if(/^CHARCUTERIETRAITEURLS$/.test(compact))return 'exclude';
@@ -100,6 +100,35 @@ function printedDepartment(line){
  }
  const family=['GROCERY','DAIRY','FROZEN','PRODUCE','BAKERY','HOME','HOUSEHOLD','CLEANING','MEATS','LIQUOR'].find(word=>label===word||word.length>=6&&oneEdit(label,word));
  return family?['MEATS','LIQUOR'].includes(family)?'exclude':['HOME','HOUSEHOLD','CLEANING'].includes(family)?'household':'kitchen':'';
+}
+function repairFrenchSeparatedAmounts(lines,rawEvidence){
+ // Thermal OCR sometimes separates cents from euros. Never infer the decimal
+ // from its shape alone: a nearby printed count/rate or weighed rate must
+ // independently reconcile the proposed amount to within one cent.
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i];
+  const spaced=line.match(/^(.+?)\s+(\d{1,3})\s+(\d{2})\s*(?:€|[c6])?\s+(1[13])$/i);
+  const joined=!spaced&&line.match(/^(.+?)\s+(\d{1,2})(\d{2})\s*[c€]\s+(1[13])$/i);
+  const match=spaced||joined;
+  if(!match)continue;
+  const candidate=Number(match[2]+'.'+match[3]);
+  if(!Number.isFinite(candidate)||candidate<=0)continue;
+  let proved=false;
+  for(let j=i+1;j<=Math.min(i+3,lines.length-1);j++){
+   const next=lines[j],counted=next.match(/^(\d{1,3})\s*[x×@]\s*(\d+[.,]\d{2})\s*(?:EUR|€)(?:\s|$)/i),
+    weighed=next.match(/^(\d+[.,]\d{1,3})\s*(?:kg|g|lb)\s*[x×@]\s*(\d+[.,]\d{2})\s*(?:€|EUR)?\s*\/\s*(?:kg|g|lb)/i);
+   if(counted&&Math.abs(num(counted[1])*num(counted[2])-candidate)<.015||weighed&&Math.abs(num(weighed[1])*num(weighed[2])-candidate)<.015){proved=true;break;}
+   if(splitPrice(next))break;
+  }
+  if(!proved)continue;
+  const heading=match[1].trim(),next=lines[i+1]||'';
+  const samePrefix=next.toUpperCase().startsWith(heading.toUpperCase()+' ');
+  if((printedDepartment(heading)||samePrefix)&&next&&!splitPrice(next)&&!printedDepartment(next)&&validName(quantity(next).name)){
+   lines[i]=heading;
+   lines[i+1]=next+' '+candidate.toFixed(2)+' € '+match[4];
+   rawEvidence[i+1]=next+'\n'+line;
+  }else lines[i]=heading+' '+candidate.toFixed(2)+' € '+match[4];
+ }
 }
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand|crv\s+sgl\s+(?:under\s+\d{2,4}z|\d{2,4}z\s+and\s+up))\s*$/i.test(priced.body)?priced.amount:null;}
@@ -188,6 +217,8 @@ export function parseReceipt(text){
   if(frenchEuro&&/^\d{1,3}\s*[x×]\s*\d+[.,]\d{2}\s*[ct(46]$/i.test(repaired))repaired=repaired.replace(/[ct(46]$/i,'€');
   return repairReconciledRateGlyph(repaired);
  }).filter(Boolean),rows=[];
+ const rawEvidence=lines.slice();
+ if(frenchEuro)repairFrenchSeparatedAmounts(lines,rawEvidence);
  let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='',frenchTableActive=false;const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
@@ -203,8 +234,9 @@ export function parseReceipt(text){
   deferredRate=null;
  }
  function add(row){finishRate(row);if(department)row.department=department;rows.push(row);}
- for(const [lineIndex,originalLine] of lines.entries()){
-  let line=originalLine;
+ for(const [lineIndex,parsedLine] of lines.entries()){
+  let line=parsedLine;
+  const originalLine=rawEvidence[lineIndex];
   if(consumed.has(lineIndex))continue;
   if(frenchTable){
    if(/^Article\b.*\bEUR\b/i.test(line)){frenchTableActive=true;pending=null;pendingDraft=null;last=null;continue;}
@@ -323,7 +355,7 @@ export function parseReceipt(text){
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(/^(?:[x×]\s+)?vente\b/i.test(line.replace(/^[*#\s]+/,''))||noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   const inlineRate=line.match(/^(.+?)\s+(\d{1,3})\s*[@x×]\s*(\d+[.,]\d{2})\s+(?:E?U[RF]|[≥:]UR)(?:\s+\(?[TD]\)?)?$/i);
   if(inlineRate&&validName(quantity(inlineRate[1]).name)){
    const row={...quantity(inlineRate[1]),amount:amount(inlineRate[3]),raw:line};applyRate(row,[null,inlineRate[2],undefined,inlineRate[3]]);add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;continue;

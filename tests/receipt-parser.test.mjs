@@ -69,6 +69,38 @@ test('French department headings do not merge into products or send toiletries t
  assert.deepEqual(doc.audit.warnings,[]);
 });
 
+test('French separated cents need a matching printed rate and retain every priced line',()=>{
+ const lines=['FICTIONAL MARKET','X VENTE $4*','BEURME 290 c 11','BEURME DATE COURTE','0.275 kg X 10.55 €/kg',
+  'BISCUITS SUCRES','SAMPLE CHOCO BISCUIT U 110G 1 46 € 11','1 X 1.46 EUR',
+  'FROMAGE LS','FROM.PAST.LE BLEU U 250G 2 58 € 11','1 X 2.58 EUR',
+  'OEUFS','OEUFS CAL.MIXTE U BTEX12 4 26 € 11','1 X 4.26 EUR',
+  'PARFUMERIE','DENT.A/TARTRE TUBE 75ML 4 12 € 13','4 X 1.03 EUR',
+  'ULTRA FRAIS','MOUSSE DE VIENNOIS CHOCO.4X90G 1.97 € 11','1 X 1.97 EUR',
+  'TOTAL [9] Articles','SOUS-TOTAL 17.29 €'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-sideways-market.jpg'},{ai:true});
+ assert.deepEqual(doc.items.map(item=>[item.receiptName,item.amount,item.packCount,item.section,!!item.excludedFromPantry]),[
+  ['BEURME DATE COURTE','2.90',1,'kitchen',false],
+  ['SAMPLE CHOCO BISCUIT U','1.46',1,'kitchen',false],
+  ['FROM.PAST.LE BLEU U','2.58',1,'',false],
+  ['OEUFS CAL.MIXTE U BTEX12','4.26',1,'',true],
+  ['DENT.A/TARTRE TUBE','4.12',4,'household',false],
+  ['MOUSSE DE VIENNOIS CHOCO.','1.97',1,'',false]
+ ]);
+ assert.match(doc.items[1].raw,/110G/);
+ assert.match(doc.items[4].raw,/75ML/);
+ assert.equal(doc.audit.netSum,'17.29');
+ assert.equal(doc.audit.packCount,9);
+ assert.match(doc.items[0].raw,/BEURME 290 c 11/);
+ assert.match(doc.items[1].raw,/1 46 € 11/);
+ assert.equal(doc.items.some(item=>/VENTE|BISCUITS SUCRES|PARFUMERIE/.test(item.receiptName)),false);
+});
+
+test('an unsupported separated price is not invented from its OCR shape',()=>{
+ const text='FICTIONAL MARKET\nFRUIT SPECIAL 7 45 11\nSAMPLE APPLES 1.25 €\nTOTAL [1] Articles\nSOUS-TOTAL 1.25 €';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount]),[['SAMPLE APPLES','1.25']]);
+});
+
 test('French unit-price tables keep line totals, weighed stock and printed line counts',()=>{
  const lines=['EXAMPLE MARKET','2.55€ UNRELATED SIDE PRINT 2.75','Ticket de vente','Article Q P:U.CUR-Dte EUR',
   'BEURRE DOUX 1,80 1 1,80 A T','07€ TOMATE RONDE 0,90 A T','70€ 0,300 kg X 3,00 EUR/kg',
