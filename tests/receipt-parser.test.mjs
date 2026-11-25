@@ -800,3 +800,12 @@ test('a slanted footer uses repeated payment and basket arithmetic to align obse
  const unproved=auditReceipt(text.replace('Visa $13.00','Visa $13.50'));
  assert.equal(unproved.total,'0.42');
 });
+
+test('a loyalty footer aligns observed subtotal, tax and payable only when all arithmetic agrees',()=>{
+ const text='Bonus Points 100 Pts\nOFFER 200 Pts\nWONDER BREAD 20.00\nNO NAME COOKIES 0.65\nSUBTOTAL 5.00 @ 13.000% 20.65\nH=HST 13%\nTOTAL';
+ const items=[{name:'TEST ITEM',amount:'20.00',packCount:1}];
+ const audit=auditReceipt(text,items);
+ assert.equal(audit.subtotal,'20.00');assert.equal(audit.tax,'0.65');assert.equal(audit.total,'20.65');
+ assert.deepEqual(audit.warnings,[]);
+ assert.equal(auditReceipt(text.replace('20.65','20.75'),items).total,undefined);
+});
