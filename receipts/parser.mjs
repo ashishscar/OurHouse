@@ -130,6 +130,63 @@ function repairFrenchSeparatedAmounts(lines,rawEvidence){
   }else lines[i]=heading+' '+candidate.toFixed(2)+' € '+match[4];
  }
 }
+function repairInterleavedWeighedRows(lines,rawEvidence){
+ // A narrow receipt can put a completed count/rate beside the next product
+ // label. Split it only when the preceding amount proves that count/rate and
+ // the next printed line is a priced weight for the new product.
+ for(let i=1;i<lines.length-1;i++){
+  const mixed=lines[i].match(/^(\d{1,3})\s*[@x×]\s*\$?(\d+[.,]\d{2})\s+(.+\p{L}(?:\s+H?MRJ)?)$/iu);
+  const previous=splitPrice(lines[i-1]),next=splitPrice(lines[i+1]);
+  if(!mixed||!previous||!next||!next.body.match(ratePattern)||!validName(quantity(mixed[3]).name)||
+     Math.abs(Number(previous.amount)-Number(mixed[1])*num(mixed[2]))>.005)continue;
+  const evidence=rawEvidence[i];
+  lines.splice(i,1,`${mixed[1]} @ $${mixed[2]}`,mixed[3]);
+  rawEvidence.splice(i,1,evidence,evidence);
+  i++;
+ }
+ // Some warped print places the far-right price one row above its weighed
+ // rate. Move both observed amounts only when the next rate reconciles its
+ // adjacent price and a unique one-digit OCR repair proves the first rate.
+ // Do not invent an amount; retain every original line in raw evidence.
+ for(let i=0;i<lines.length-2;i++){
+  const orphan=splitPrice(lines[i]),middle=splitPrice(lines[i+1]),following=lines[i+2].match(ratePattern);
+  if(!orphan||orphan.body||!middle||!following||splitPrice(lines[i+2]))continue;
+  const first=middle.body.match(ratePattern);
+  if(!first||!first[2]||!following[2]||first[2].toLowerCase()!==following[2].toLowerCase())continue;
+  const secondTotal=num(following[1])*num(following[3]);
+  const corrected=reconciledWeighedRate(first[3],num(first[1]),orphan.amount);
+  if(!corrected||Math.abs(secondTotal-Number(middle.amount))>.005||
+     Math.abs(num(first[1])*Number(corrected)-Number(orphan.amount))>.005)continue;
+  const [a,b,c]=rawEvidence.slice(i,i+3);
+  lines.splice(i,3,`${middle.body} ${orphan.amount}`,`${lines[i+2]} ${middle.amount}`);
+  rawEvidence.splice(i,3,a+'\n'+b,b+'\n'+c);
+  i++;
+ }
+}
+function repairInterleavedCountRows(lines,rawEvidence){
+ // On a tilted till, a department and its product can share one OCR box;
+ // its count/rate can then be merged with the *next* product. Require an
+ // intervening item code with the same count and two distinct printed prices.
+ // The rate proves the first amount; the other amount remains with the next
+ // label. Every glyph from the original scan remains in raw evidence.
+ for(let i=0;i<lines.length-3;i++){
+  const heading=lines[i].match(/^\d{1,2}[-–]\S+\s+(\S+)\s+(.+)$/i);
+  const code=lines[i+1].match(/^\((\d{1,3})\)\d{7,14}$/);
+  const orphan=splitPrice(lines[i+2]),mixed=splitPrice(lines[i+3]);
+  const interleaved=mixed?.body.match(/^(\d{1,3})\s*[@x×]\s*\$?(\d+[.,]\d{2})\s+(.+)$/i);
+  if(!heading||!code||!orphan||orphan.body||!interleaved||
+     Number(code[1])!==Number(interleaved[1])||
+     Math.abs(Number(mixed.amount)-Number(interleaved[1])*num(interleaved[2]))>.005||
+     mixed.amount===orphan.amount)continue;
+  const firstLabel=heading[2],secondLabel=interleaved[3];
+  if(firstLabel.trim().split(/\s+/).length<2||!validName(quantity(firstLabel).name)||
+     !validName(quantity(secondLabel).name))continue;
+  const original=rawEvidence.slice(i,i+4);
+  lines.splice(i,4,`${firstLabel} ${mixed.amount}`,`${interleaved[1]} @ $${interleaved[2]}`,`${secondLabel} ${orphan.amount}`);
+  rawEvidence.splice(i,4,original[0]+'\n'+original[1],original[3],original[2]+'\n'+original[3]);
+  i+=2;
+ }
+}
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
 function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand|crv\s+sgl\s+(?:under\s+\d{2,4}z|\d{2,4}z\s+and\s+up))\s*$/i.test(priced.body)?priced.amount:null;}
 function stripDamagedItemCode(name){
@@ -219,6 +276,8 @@ export function parseReceipt(text){
  }).filter(Boolean),rows=[];
  const rawEvidence=lines.slice();
  if(frenchEuro)repairFrenchSeparatedAmounts(lines,rawEvidence);
+ repairInterleavedWeighedRows(lines,rawEvidence);
+ repairInterleavedCountRows(lines,rawEvidence);
  let pending=null,pendingDraft=null,last=null,deferredRate=null,beforeDiscount=null,orphanPrice=null,department='',frenchTableActive=false;const consumed=new Set();
  // Some tills put a count/rate immediately before the next product. Do not
  // overwrite the previous product when its printed amount cannot match it.
@@ -279,7 +338,8 @@ export function parseReceipt(text){
   // points offer between purchases must not truncate the basket.
   if(rows.length&&/^bonus\s+points\b/i.test(line)){
    const tail=lines.slice(lineIndex,Math.min(lines.length,lineIndex+16));
-   if(tail.filter(entry=>/\b\d+\s*(?:pts|points)\b/i.test(entry)).length>=3&&tail.some(entry=>/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(entry.replace(/^[*\s]+/,''))))break;
+   const surrounding=lines.slice(Math.max(0,lineIndex-3),Math.min(lines.length,lineIndex+16));
+   if(surrounding.filter(entry=>/\b\d+\s*(?:pts|points)\b/i.test(entry)).length>=3&&tail.some(entry=>/^(?:sub[\s-]*total|grand\s*total|total)\b/i.test(entry.replace(/^[*\s]+/,''))))break;
   }
   // A tilted OCR box can merge a damaged "Offers" label with the product
   // beside it. Keep only the visible product suffix when a separate item
@@ -444,7 +504,7 @@ export function parseReceipt(text){
    }
    if(!pending&&!body.match(ratePattern)&&(!last?.amount||Math.abs(Number(last.amount)-num(rate[1])*Number(amount(rate[3])))>.03)){finishRate(undefined,false);deferredRate={rate,line,previous:last};continue;}
    const repeated=!pending&&last?.unitPrice&&priced&&body.match(ratePattern),row=pending?(pendingDraft||{...quantity(pending),raw:pending}):repeated?{...quantity(last.name),itemNumber:last.itemNumber,raw:last.name}:last;
-   if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+line;if(pending){if(row.amount&&validName(row.name))add(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
+   if(row){applyRate(row,rate);if(priced&&body.match(ratePattern))row.amount=priced.amount;row.raw+='\n'+originalLine;if(pending){if(row.amount&&validName(row.name))add(row);else {pending=row.raw;pendingDraft=row;}}last=row;}
    if(repeated&&row?.amount&&validName(row.name))add(row);
    if(row?.amount){pending=null;pendingDraft=null;}continue;
   }
@@ -515,9 +575,25 @@ export function auditReceipt(text,items=pantryReceipt(text)){
   if(partial)footer.partialBasketCount=Number(partial[1]);
  }
  if(footer.productCount===undefined){for(let i=0;i<lines.length;i++)if(/^\s*(?:number\s+of\s+items|sold\s+items)\s*:?\s*$/i.test(lines[i])){const neighbor=[lines[i-1],lines[i+1]].find(value=>/^\s*\d{1,4}\s*$/.test(value||''));if(neighbor){footer.productCount=Number(neighbor.trim());footer.productCountEvidence={printed:lines[i],value:neighbor.trim(),layout:'adjacent'};break;}}}
- if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  const itemSum=rounded(items.reduce((n,r)=>n+Number(r.amount||0),0)),packCount=items.reduce((n,r)=>n+(r.packCount||1),0);
  const netSum=rounded(itemSum+charges-discounts);
+ // A slanted receipt can put the subtotal amount beside the tax heading and
+ // the tax amount beside TOTAL. Reassign these observed values only when the
+ // subtotal heading is unpriced, the following payment repeats their sum,
+ // and the independently calculated basket equals that first amount.
+ for(let i=0;i<lines.length-3;i++){
+  if(!/^\s*sub[\s-]*total\s*$/i.test(lines[i]))continue;
+  const tax=splitPrice(lines[i+1]),misplacedTotal=splitPrice(lines[i+2]),payment=splitPrice(lines[i+3]);
+  if(!tax||!misplacedTotal||!payment||!/^\s*(?:h?gst|hst|tax)\b/i.test(tax.body)||
+     !/^\s*total\s*$/i.test(misplacedTotal.body)||
+     !/^\s*(?:visa|mastercard|debit|credit|card)\b/i.test(payment.body)||
+     Math.abs(Number(tax.amount)-netSum)>.02||
+     Math.abs(Number(tax.amount)+Number(misplacedTotal.amount)-Number(payment.amount))>.02)continue;
+  footer.subtotal=tax.amount;footer.tax=misplacedTotal.amount;footer.total=payment.amount;
+  footer.totalEvidence='Amounts aligned from adjacent subtotal, tax, total and payment rows; compare the photo.';
+  break;
+ }
+ if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  // Some tills print original list prices as subtotal and already-discounted
  // product prices as line totals. Accept the latter only when they reconcile
  // to a separately printed final total; keep the gross subtotal visible.
