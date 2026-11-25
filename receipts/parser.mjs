@@ -593,6 +593,22 @@ export function auditReceipt(text,items=pantryReceipt(text)){
   footer.totalEvidence='Amounts aligned from adjacent subtotal, tax, total and payment rows; compare the photo.';
   break;
  }
+ // A loyalty footer may put the right-column subtotal and tax beside offer
+ // labels while its final amount lands on the printed tax-rate line. Keep
+ // these as observed amounts and align them only if the independent basket,
+ // printed tax calculation and printed payable all agree to the cent.
+ for(let i=2;i<lines.length-2;i++){
+  const rate=lines[i].match(/^\s*sub[\s-]*total\s+(\d+[.,]\d{2})\s*[@x×]\s*(\d+(?:[.,]\d{1,3})?)%\s+(\d+[.,]\d{2})\s*$/i);
+  if(!rate||!lines.slice(Math.max(0,i-8),i).some(line=>/^\s*bonus\s+points\b/i.test(line))||
+     !lines.slice(i+1,i+3).some(line=>/^\s*(?:[A-Z]=)?(?:h?gst|hst|tax)\b/i.test(line)))continue;
+  const subtotal=splitPrice(lines[i-2]),tax=splitPrice(lines[i-1]);
+  if(!subtotal||!tax||Math.abs(Number(subtotal.amount)-netSum)>.02||
+     Math.abs(Math.round(num(rate[1])*num(rate[2]))/100-Number(tax.amount))>.005||
+     Math.abs(Number(subtotal.amount)+Number(tax.amount)-num(rate[3]))>.005)continue;
+  footer.subtotal=subtotal.amount;footer.tax=tax.amount;footer.total=amount(rate[3]);
+  footer.totalEvidence='Subtotal, tax and payable aligned from adjacent loyalty footer rows; compare the photo.';
+  break;
+ }
  if(!footer.subtotal&&!footer.total)warnings.push('No printed total was read. Compare the product list with the whole photo.');
  // Some tills print original list prices as subtotal and already-discounted
  // product prices as line totals. Accept the latter only when they reconcile
