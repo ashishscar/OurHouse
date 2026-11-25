@@ -751,3 +751,52 @@ test('damaged French departments stay separate from priced product labels',()=>{
  ]);
  assert.deepEqual(parseReceipt('CONFITURE MIEL 370G 2.64 € 11\nTOTAL 2.64 €').map(row=>row.name),['CONFITURE MIEL']);
 });
+
+test('interleaved count and weighed rows preserve each printed purchase',()=>{
+ const text=[
+  'SPINACH BUNCHED MRJ 5.58',
+  '2 @ $2.79 TOMATO RED MRJ',
+  '3.915 kg @ $2.18/kg 8.53',
+  '3.815 kg @ $2.18/kg 8.32',
+  '7.35',
+  '3.370 kg @ $2.13/kg 7.20',
+  '3.305 kg @ $2.18/kg',
+  'SUBTOTAL 35.98'
+ ].join('\n');
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>row.amount),['5.58','8.53','8.32','7.35','7.20']);
+ assert.deepEqual(rows.map(row=>row.name),['SPINACH BUNCHED','TOMATO RED','TOMATO RED','TOMATO RED','TOMATO RED']);
+ assert.equal(rows[0].packCount,2);
+ assert.deepEqual(rows.slice(1).map(row=>row.qty),[3.915,3.815,3.37,3.305]);
+ assert.match(rows[3].raw,/2\.13\/kg 7\.20/);
+ assert.match(rows[3].warning,/does not match/i);
+});
+
+test('interleaved weighed prices stay untouched without arithmetic proof',()=>{
+ const lines='SPINACH BUNCHED MRJ 5.58\n2 @ $2.79 TOMATO RED MRJ\n3.915 kg @ $2.18/kg 8.53\n7.35\n3.370 kg @ $2.13/kg 7.20\n3.305 kg @ $2.99/kg';
+ const rows=parseReceipt(lines);
+ assert.equal(rows.some(row=>row.amount==='7.20'&&row.name==='TOMATO RED'),false);
+ assert.equal(rows.some(row=>row.amount==='7.35'&&row.name==='TOMATO RED'),false);
+});
+
+test('a tilted department and count row keep two separate printed purchases',()=>{
+ const text='34-BAKERY COMMERCIALPC GIGANTICO BUN MRJ\n(4)06038389781\n2.50\n4 @ $3.00 WHOLE WHEAT BREAD MRJ 12.00\nSUBTOTAL $14.50';
+ const rows=parseReceipt(text);
+ assert.deepEqual(rows.map(row=>[row.name,row.amount,row.packCount]),[
+  ['GIGANTICO BUN','12.00',4],['WHOLE WHEAT BREAD','2.50',1]
+ ]);
+ assert.match(rows[0].raw,/34-BAKERY/);
+ assert.match(rows[1].raw,/2\.50/);
+ assert.equal(auditReceipt(text,rows).netSum,'14.50');
+ const unproved=text.replace('4 @ $3.00','4 @ $4.00');
+ assert.notDeepEqual(parseReceipt(unproved).map(row=>row.amount),['12.00','2.50']);
+});
+
+test('a slanted footer uses repeated payment and basket arithmetic to align observed amounts',()=>{
+ const text='CREAM $8.99\nMILK $3.59\nSUB TOTAL\nHST $12.58\nTOTAL $0.42\nVisa $13.00';
+ const audit=auditReceipt(text);
+ assert.equal(audit.subtotal,'12.58');assert.equal(audit.tax,'0.42');assert.equal(audit.total,'13.00');
+ assert.deepEqual(audit.warnings,[]);
+ const unproved=auditReceipt(text.replace('Visa $13.00','Visa $13.50'));
+ assert.equal(unproved.total,'0.42');
+});
