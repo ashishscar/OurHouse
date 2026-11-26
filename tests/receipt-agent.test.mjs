@@ -84,6 +84,10 @@ test('a named product section without line totals requests fallback instead of s
  const {store,env}=setup();env.RECEIPT_AI.run=async()=>({response:JSON.stringify({lines:['BRANDX RICE 1KG','3 @ $2.00','BRANDX TEA 100G'],labels:[{line:0,shortName:'Rice',section:'pantry'},{line:2,shortName:'Tea',section:'pantry'}]})});
  await assert.rejects(()=>readReceiptSection(store,'synthetic-user',env,{...body,productLabels:true}),e=>e.code==='AI_UNAVAILABLE');
 });
+test('a partly priced AI section requests fallback when its own labels reveal an omitted amount',async()=>{
+ const {store,env}=setup();env.RECEIPT_AI.run=async()=>({response:JSON.stringify({lines:['RICE 1KG $5.00','TEA 100G','TOTAL $5.00'],labels:[{line:0,shortName:'Rice',section:'pantry'},{line:1,shortName:'Tea',section:'pantry'}]})});
+ await assert.rejects(()=>readReceiptSection(store,'synthetic-user',env,{...body,productLabels:true}),e=>e.code==='AI_UNAVAILABLE');
+});
 
 test('overlap aligns misplaced numeric item identifiers without merging repeated purchases elsewhere',()=>{
  const result=mergeTranscriptions([{section:{top:0,height:1000},lines:['RICE $2.00','4123 ROMA TOMATO MRJ $4.00','5123 GREEN PEPPER MRJ $3.00']},{section:{top:800,height:1000},lines:['ROMA TOMATO MRJ 4123 $4.00','GREEN PEPPER MRJ 5123 $3.00','RICE $2.00','TOTAL $11.00']}]);

@@ -1751,12 +1751,21 @@ Instructions
   <div class="shead"><h3><span data-icon="receipt" data-icon-size="19"></span>Scanned items</h3><button class="btn sm grey" onclick="closeAllSheets()">Close</button></div>
   <div class="sbody">
     <p class="finehint" style="margin:0 0 12px" id="scanReviewIntro"></p>
+    <a id="receiptOriginalQuick" class="btn tint block" target="_blank" rel="noopener" aria-label="Open original receipt photo for text selection">Open original photo · select text</a>
+    <button type="button" class="btn grey block" style="margin-top:8px" onclick="openReceiptTextView()">Compare photo with scanned text</button>
     <div id="scanReceiptDetails" style="margin-bottom:16px"></div>
     <div id="scanReviewList"></div>
     <button class="btn grey block" onclick="addMissingReceiptItem()">Add a missing product</button>
     <button class="btn primary block" style="margin-top:6px" onclick="applyScan()">Add selected to pantry</button>
   </div>
 </div>
+<dialog id="receiptTextView" class="receipt-text-view" aria-label="Receipt photo and recognized text" onclose="closeReceiptTextView()">
+  <div class="receipt-text-head"><h2>Receipt photo</h2><button type="button" class="btn grey sm" onclick="document.getElementById('receiptTextView').close()">Done</button></div>
+  <div class="receipt-text-content">
+    <div class="receipt-text-photo"><img id="receiptTextPhoto" alt="Receipt photo at readable size"><p class="finehint">On iPhone, open the original photo and touch and hold printed text to use Live Text. This reads directly from the image.</p><a id="receiptTextOriginal" class="btn grey sm" target="_blank" rel="noopener" aria-label="Open original receipt photo for image text selection">Open original photo</a></div>
+    <div class="receipt-text-copy"><h3>Text read from photo</h3><p class="finehint">Press and hold any word or number, adjust the selection, then copy exactly what the scan read. Compare it with the photo before correcting an item.</p><div class="receipt-copy-actions"><button type="button" class="btn grey sm" onclick="copySelectedReceiptText()">Copy selection</button><button type="button" class="btn grey sm" onclick="copyReceiptScanText()">Copy all text</button></div><pre id="receiptTextTranscript" aria-label="Recognized receipt text"></pre></div>
+  </div>
+</dialog>
 
 <!-- Monthly insights -->
 <div class="sheet" id="sheet-insights">

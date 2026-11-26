@@ -1,0 +1,34 @@
+// Recognize a complete printed count heading. Never infer a count from stock,
+// prices, basket subsets or an incomplete line.
+function oneEdit(a,b){
+ if(Math.abs(a.length-b.length)>1)return false;
+ let i=0,j=0,edits=0;
+ while(i<a.length&&j<b.length){
+  if(a[i]===b[j]){i++;j++;continue;}
+  if(++edits>1)return false;
+  if(a.length>=b.length)i++;
+  if(b.length>=a.length)j++;
+ }
+ return edits+(i<a.length||j<b.length?1:0)<=1;
+}
+export function printedReceiptCount(line){
+ if(typeof line!=='string'||line.length>160)return null;
+ const frenchPay=line.trim().match(/^(\d{1,4})\s+ARTICLE(?:S|\(S\))\s+TOTAL\s+[AÀ]\s+PAYER\b/i);
+ if(frenchPay)return {label:'Articles',value:frenchPay[1],printed:line,headingCorrected:false};
+ const frenchTotal=line.trim().match(/^TOTAL\s+(\d{1,4})\s+ARTICLES?\b/i);
+ if(frenchTotal)return {label:'Articles',value:frenchTotal[1],printed:line,headingCorrected:false};
+ const german=line.trim().match(/^Posten\s*:\s*(\d{1,4})\s*$/i);
+ if(german)return {label:'Posten',value:german[1],printed:line,headingCorrected:false};
+ const french=line.trim().match(/^TOTAL\s*\[(\d{1,4})\]\s+Ar\s*ticles\b/i);
+ if(french)return {label:'Total articles',value:french[1],printed:line,headingCorrected:false};
+ const frenchSold=line.trim().match(/^Nombre\s+d['’]articles\s+vendus\s*[:=]\s*(\d{1,4})\s*$/i);
+ if(frenchSold)return {label:'Articles vendus',value:frenchSold[1],printed:line,headingCorrected:false};
+ const frenchOrder=line.trim().match(/^D[eé]tail\s+de\s+votre\s+commande\b.*\((\d{1,4})\s+produits?\)\s*$/i);
+ if(frenchOrder)return {label:'Order products',value:frenchOrder[1],printed:line,headingCorrected:false};
+ const sold=line.trim().match(/^Sold\s+Items\s*[:=]\s*(\d{1,4})\s*$/i);
+ if(sold)return {label:'Sold Items',value:sold[1],printed:line,headingCorrected:false};
+ let m=line.trim().match(/^([a-z]{5,7})\s+of\s+(products|items)\s*[:=]?\s*(\d{1,4})\s*$/i);
+ if(m&&oneEdit(m[1].toLowerCase(),'number'))return{label:'Number of '+m[2].toLowerCase(),value:m[3],printed:line,headingCorrected:m[1].toLowerCase()!=='number'};
+ m=line.trim().match(/^#?\s*(items?\s+(?:sold|count))\s*[:=]?\s*(\d{1,4})\s*$/i);
+ return m?{label:m[1],value:m[2],printed:line,headingCorrected:false}:null;
+}
