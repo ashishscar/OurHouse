@@ -22,6 +22,8 @@ const verifiedCatalog={walmart:{
  '1974989':{terms:['EVRST','12X600'],name:'White towel rolls',section:'household',source:'https://www.costco.ca/p/-/everest-pro-signature-white-towel-roll-197-cm-x-18288-m/4000393138'},
  '2633624':{terms:['CHARMIN','ULTR'],name:'Toilet paper',section:'household',source:'https://www.costco.ca/p/-/charmin-ultra-soft-toilet-paper-jumbo-rolls-30-200-sheets/4000399694'},
  '3458556':{terms:['TIDE','COLDWTR'],name:'Coldwater laundry detergent',section:'household',source:'https://www.costco.ca/p/-/tide-ultra-coldwater-clean-liquid-laundry-detergent-124-loads/4000363006'},
+ '1957847':{terms:['BOUNCE'],strictLabel:true,name:'Dryer sheets',section:'household',source:'https://www.costco.ca/p/-/bounce-select-a-size-dryer-sheets-400-count/4000422092'},
+ '1370764':{terms:['DEMP','TEX','WHT'],name:'White Texas toast',section:'kitchen',source:'https://www.costcobusinesscentre.ca/p/-/dempsters-tranches-de-pain-blanc-3-675-g/100363782'},
  '232952':{terms:['COKE','ZERO'],name:'Coke Zero',section:'kitchen',source:'https://www.costco.ca/p/-/coca-cola-zero-355-ml-32-pack/100548619'},
  '1041477':{terms:['PINEAP','JUICE'],name:'Pineapple juice',section:'kitchen',source:'https://www.costco.ca/p/-/freshn-pure-pineapple-burst-juice-blend-6-1-l/100461737'},
  '1792990':{terms:['KS','PAD','JLA'],name:'Absorbent pads',section:'household',source:'https://www.costco.ca/p/-/kirkland-signature-absorbent-multipurpose-pads-100-count/4000281816'},
@@ -123,6 +125,9 @@ export function qualifiedReceiptName(proposed,receiptName){
  return supportedName(completed,receiptName)?completed[0].toUpperCase()+completed.slice(1):'';
 }
 function labelKey(value){return String(value||'').normalize('NFKC').toUpperCase().replace(/(?<=[A-Z])0(?=[A-Z])/g,'O').replace(/[^A-Z0-9%]+/g,' ').trim();}
+function catalogTermsMatch(entry,printed){
+ return entry.terms.every(term=>printed.has(term))&&(!entry.strictLabel||[...printed].every(term=>entry.terms.includes(term)));
+}
 function costcoEvidence(receiptText){
  if(/^\s*COSTCO(?:\s+WHOLESALE)?\b/im.test(receiptText))return true;
  const lines=String(receiptText||'').split(/\r?\n/),first=lines.find(line=>line.trim())||'';
@@ -131,7 +136,7 @@ function costcoEvidence(receiptText){
  // Cropped or faint logos are common. Two independent SKU-plus-label matches
  // establish the retailer without guessing from an isolated number.
  const matches=new Set();
- for(const line of lines){const match=line.match(/^\s*(\d{5,8})\s+(.+)$/);if(!match)continue;const entry=verifiedCatalog.costco[match[1]];if(!entry)continue;const printed=new Set(labelKey(match[2]).split(' '));if(entry.terms.every(term=>printed.has(term)))matches.add(match[1]);}
+ for(const line of lines){const match=line.match(/^\s*(\d{5,8})\s+(.+)$/);if(!match)continue;const entry=verifiedCatalog.costco[match[1]];if(!entry)continue;const printed=new Set(labelKey(match[2]).split(' '));if(catalogTermsMatch(entry,printed))matches.add(match[1]);}
  if(matches.size>=2)return true;
  // Costco's distinctive pre-scanned basket heading and footer support one
  // exact SKU match when the logo itself is cropped or unreadable.
@@ -141,7 +146,7 @@ function catalogMatch(row,retailer){
  const entry=verifiedCatalog[retailer]?.[String(row.itemNumber||'').trim()];
  if(!entry)return null;
  const printed=new Set(labelKey(row.receiptName||row.name).replace(/\bCRLSH\b/g,'CRUSH').split(' '));
- return entry.terms.every(term=>printed.has(term))?entry:null;
+ return catalogTermsMatch(entry,printed)?entry:null;
 }
 function merchantProduct(receiptName,receiptText){
  const header=String(receiptText||'').split(/\r?\n/).find(line=>line.trim())||'';
