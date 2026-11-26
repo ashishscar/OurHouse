@@ -52,7 +52,14 @@ const verifiedFrenchChocolate=/\bEXCEL(?:LENCE)?[.\s]+NOIR[.\s]+FRAMBOI\w*/i;
 // or 1. The exact Kerrygold salted label is a food product in the maker's
 // catalog; retain its printed name because the receipt gives no pack details.
 // https://www.kerrygold.de/produkte/gesalzene-butter-aus-irischer-weidemilch/
-const germanFood=/\b(?:[o0]liven[oö0]l|hon[i1l]g|hummus|m[oö]hren|apfel|ananas|z[i1]mtschnecke|haferflocken|apfelsaft|kerrygold\s+gesalzen)\b/i;
+// Product words in German, including common compound endings and OCR's oe/ae
+// transliterations. These suggest a section; they never repair the transcript.
+const germanFood=/\b(?:[o0]liven[oö0]l|hon[i1l]g|hummus|m[oö]hren|apfel|ananas|z[i1]mtschnecke|haferflocken|apfelsaft|kerrygold\s+gesalzen|sonn\w*blum\w*n(?:oel|öl)|erda?e?pfel|kartoffel\w*|naturjogh\w*|joghurt\w*|bananen?|knoblauch|butter(?:mild|sauer|gesalzen|ungesalzen)\w*|\w+brot|marmelade|zucker|mehl|reis)\b/i;
+const germanMeat=/\b(?:hackfleisch|rindfleisch|schweinefleisch|gefl[uü]gel|wurst|speck)\b/i;
+// The maker lists gelatin in this exact product. The till label alone cannot
+// reveal that ingredient, so keep this verified product out of vegetarian stock.
+// https://www.haribo.com/de-de/produkte/maoam/kracher
+const verifiedGelatinProduct=/\b(?:haribo\s+)?maoam\s+kracher\b/i;
 const italianFood=/\b(?:uova|pane|panettone|peperoni|broccoli|tortelli|zucca|polenta|clementine|kiwi|datteri|avena|patatine|pancake|nocciole|marroni|asparagi|olive|yog\w*|succo|infus[oi]|sesamo|arachidi|cacahuetes|frut[ti]a|porcino|bauletto|cereali|piselli|carotine)\b/i;
 const groundedFoodTypes=/\b(?:artichokes?|blueberr(?:y|ies)|kombucha|hibiscus)\b/i;
 const excludedEggs=/\b(?:eggs?|eggnog|[o0]eufs?)\b/i;
@@ -287,7 +294,7 @@ export function identifyReceiptItems(rows,annotations=[],receiptText=''){
   // spinach filling can override the section, but an explicit meat word cannot.
   const vegetarianPasta=/\b(?:tortellini|ravioli)\b.*\b(?:ricott|epin|spinach|fromage|cheese)/i.test(receiptName)&&!excludedFood.test(receiptName);
   const buckwheatGalette=/\b\d*galet\w*\b.*\bsarrasin\b/i.test(receiptName);
-  const excluded=row.department==='exclude'&&!clear&&!vegetarianPasta&&!buckwheatGalette||verified?.section==='exclude'||(excludedFood.test(receiptName)||frenchExcluded.test(receiptName))&&!plantBasedSeasoning||excludedEggs.test(receiptName)||nonStock.test(receiptName);
+  const excluded=row.department==='exclude'&&!clear&&!vegetarianPasta&&!buckwheatGalette||verified?.section==='exclude'||(excludedFood.test(receiptName)||frenchExcluded.test(receiptName)||germanMeat.test(receiptName))&&!plantBasedSeasoning||excludedEggs.test(receiptName)||verifiedGelatinProduct.test(receiptName)||nonStock.test(receiptName);
   const rennetReview=uncertainRennet.test(receiptName)&&!/\b(?:paneer|vegan|plant.based|vegetarian|microbial\s+rennet)\b/i.test(receiptName);
   const dessertReview=/\bmousse\b/i.test(receiptName)&&!/\b(?:vegan|plant.based|vegetarian)\b/i.test(receiptName);
   const section=excluded||rennetReview||dessertReview?'':clear||verified?.section||(vegetarianPasta?'kitchen':'')||(['kitchen','household'].includes(row.department)?row.department:'')||(sections.length===1?sections[0]:'');

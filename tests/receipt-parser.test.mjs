@@ -207,6 +207,15 @@ test('German food, meat, and rennet-uncertain cheese receive conservative sectio
  assert.deepEqual(doc.items.map(row=>Boolean(row.excludedFromPantry)),[false,false,true,true,true,false]);
 });
 
+test('German compound food names route to pantry while meat and verified gelatin candy stay out',()=>{
+ const lines=['MUSTER MARKT','SONNBLUMENOEL 1L 1,89','ERDAEPFEL 2KG 2,29','NATURJOGH. 500G 0,89',
+  'BANANEN LOSE 0,85','KNOBLAUCH 150G 1,49','BUTTERMILDGESAUERT250G 1,15','WELTMEISTERBROT 750G 1,99',
+  'HACKFLEISCH GEMISCHT 500G 3,49','HARIBO MAOAM KRACHER 200G 1,39','SUMME 15,42'];
+ const doc=documentFrom([{lines,native:true}],{name:'fictional-german-compounds.jpg'},{ai:true});
+ assert.deepEqual(doc.items.slice(0,7).map(row=>row.section),Array(7).fill('kitchen'));
+ assert.deepEqual(doc.items.slice(7).map(row=>Boolean(row.excludedFromPantry)),[true,true]);
+});
+
 test('bottle price with included deposits keeps its product, units and expense without pantry stock',()=>{
  const lines=['SAMPLE LIQUOR STORE','SAMPLE WINE','90001234 01250ML DEP .10 ea.','(4 @ 5.00) 20.40','Total 20.40','Deposit (DEP) 0.40','Gift Card 10.00','Visa 10.40'];
  const doc=documentFrom([{lines,native:true}],{name:'synthetic-bottle.jpg'},{ai:true});
