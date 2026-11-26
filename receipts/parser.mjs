@@ -8,6 +8,9 @@ const noise=/^(?:(?:(?:sub[\s-]*|grand\s*|sous[\s-]*)?total|totale(?:\s+compless
 const unitMap={g:'g',gm:'g',gms:'g',gram:'g',grams:'g',kg:'kg',kgs:'kg',ml:'ml',l:'L',litre:'L',liter:'L',litres:'L',liters:'L',pc:'pcs',pcs:'pcs',ea:'pcs',each:'pcs',pk:'packet',pack:'packet',packs:'packet',packet:'packet',packets:'packet',bunch:'bunch',lb:'kg',lbs:'kg',oz:'g'};
 const unitPattern=String.raw`kg|kgs|gms|gm|grams?|ml|litres?|liters?|pcs?|each|ea|packets?|packs?|pk|bunch|lbs?|oz|g|l`;
 const measurement=new RegExp(String.raw`\b(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i');
+// Compact tills can print a package size against the last word (e.g. Butter250g).
+// Require a terminal mass or volume unit so an embedded SKU is not a quantity.
+const gluedMeasurement=/(?<=\p{L})(\d{1,4}(?:[.,]\d{1,3})?)\s*(kg|g|ml|l)$/iu;
 const ratePattern=new RegExp(String.raw`^\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})?\s*[@x×]\s*(?:1\s*/\s*)?(?:${currency})?\s*(\d*\s*[.,]\s*\d{2})(?:\s*€)?(?:\s*(?:(?:per|/)\s*(?:1\s*)?(?:${unitPattern})|ea\.?))?(?:\s+(?:H?MRJ|W|EUR|€|E?UF|E?UR|[≥:]UR|CUF))?\s*$`,'i');
 const bareDiscount=new RegExp(String.raw`^\s*(?:-\s*(?:${currency})?\s*\d+[.,]\d{2}|(?:${currency})?\s*\d+[.,]\d{2}\s*-)(?:\s*[A-Z*]{1,3})?\s*$`,'i');
 const num=s=>Number(String(s).replace(/\s/g,'').replace(',','.'));
@@ -211,7 +214,7 @@ function quantity(body){
  if(counted){count=Number(counted[1]);name=name.slice(counted[1].length).trim();known=true;}
  if(lead){count=Number(lead[1]);name=name.slice(lead[0].length);known=true;}
  const itemNumber=name.match(/^(\d{4,14}\/\d{1,4}|\d{3}-\d{4}-\d|\d{3,14})\s+/)?.[1]||trailingCode,multi=name.match(new RegExp(String.raw`(?<!\d)(\d{1,3})\s*[x×]\s*(\d+(?:[.,]\d{1,3})?)\s*(${unitPattern})\b`,'i'));
- const candidateWeight=multi?null:name.match(measurement);
+ const candidateWeight=multi?null:name.match(measurement)||name.match(gluedMeasurement);
  // POS item codes can precede a store prefix such as "PC". The code is an
  // identifier, not a count of pieces, even though "pc" is also a unit.
  const weight=candidateWeight&&(num(candidateWeight[1])<=0||candidateWeight.index===0&&itemNumber&&candidateWeight[1]===itemNumber)?null:candidateWeight;
@@ -410,12 +413,23 @@ export function parseReceipt(text){
    if(last&&Math.abs(num(tillQty[1])*num(tillQty[2])-Number(last.amount))<.005){applyRate(last,[null,tillQty[1],undefined,tillQty[2]]);last.raw+='\n'+line;}
    continue;
   }
+  // European tills can print the weighed amount below its priced product as
+  // "0,854 × 1,00 EUR/kg". Bind it only when the observed line amount agrees.
+  const euroWeightRate=line.match(/^(\d+(?:[.,]\d{1,3})?)\s*(kg|g|lb)?\s*[@x×]\s*(\d+[.,]\d{2})\s*EUR\s*\/\s*(kg|g|lb)$/i);
+  if(euroWeightRate){
+   const unit=(euroWeightRate[2]||euroWeightRate[4]).toLowerCase();
+   const inPriceUnit=euroWeightRate[2]&&euroWeightRate[2].toLowerCase()!==euroWeightRate[4].toLowerCase()?NaN:num(euroWeightRate[1]);
+   if(last&&!pending&&Number.isFinite(inPriceUnit)&&Math.abs(inPriceUnit*num(euroWeightRate[3])-Number(last.amount))<=.015){
+    applyRate(last,[null,euroWeightRate[1],unit,euroWeightRate[3]]);last.raw+='\n'+originalLine;
+   }else if(last){last.warning='The printed weight × unit price did not match this product amount. Check the photo before selecting it.';last.unmatchedQuantity=originalLine;}
+   continue;
+  }
   const discount=discountPrice(line),positive=discount&&line.replace(/\s*-\s*[$₹£€]?\s*\d+[.,]\d{2}(?:\s*[A-Z*]{1,3})?\s*$/i,'').match(ratePattern);
   // A coupon may be printed between a product and its count/rate. Hold a
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(/^(?:[x×]\s+)?vente\b/i.test(line.replace(/^[*#\s]+/,''))||noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(/^(?:[x×]\s+)?vente\b/i.test(line.replace(/^[*#\s]+/,''))||/^rabatt$/i.test(line)||noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   const inlineRate=line.match(/^(.+?)\s+(\d{1,3})\s*[@x×]\s*(\d+[.,]\d{2})\s+(?:E?U[RF]|[≥:]UR)(?:\s+\(?[TD]\)?)?$/i);
   if(inlineRate&&validName(quantity(inlineRate[1]).name)){
    const row={...quantity(inlineRate[1]),amount:amount(inlineRate[3]),raw:line};applyRate(row,[null,inlineRate[2],undefined,inlineRate[3]]);add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;continue;

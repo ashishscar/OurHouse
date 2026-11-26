@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('glued package sizes and a reconciled EUR/kg continuation keep stock separate from discounts',()=>{
+ const text=['SAMPLE MARKET','Mild Butter250g 1,15','Mild Butter250g 1,15','Bananas Loose 0,85',
+  '0,854 × 1,00 EUR/kg','Bread 1,99','-1,00','Rabatt','Mild Butter250g 1,15','SUMME 5,29'].join('\n');
+ const rows=pantryReceipt(text),audit=auditReceipt(text,rows);
+ assert.equal(rows.length,5);
+ assert.deepEqual(rows.filter(row=>row.name==='Mild Butter').map(row=>[row.qty,row.unit,row.amount]),[[250,'g','1.15'],[250,'g','1.15'],[250,'g','1.15']]);
+ assert.deepEqual([rows[2].qty,rows[2].unit,rows[2].amount],[0.854,'kg','0.85']);
+ assert.match(rows[2].raw,/EUR\/kg/);
+ assert.ok(rows.every(row=>!row.name.includes('Rabatt')));
+ assert.deepEqual([audit.discounts,audit.netSum,audit.total],['1.00','5.29','5.29']);
+ assert.deepEqual(audit.warnings,[]);
+});
+
 test('damaged total heading stops footer and a damaged unit digit uses count and line total',()=>{
  const lines=['EXAMPLE MARKET','APPLES 1,00','BANANAS 1,00','POTATOES 1,00','CARROTS 1,00','ORANGES 1,00',
   '70G SAMPLE CHO COOKIE','4 X 1,$9 5,56','REDUCTION -1,00','TOTA(AL 10,56','TOTA(AL 9,56'];
