@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import {identifyReceiptItems,receiptSection,supportedName,qualifiedReceiptName} from '../receipts/identity.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 import {parseReceipt,auditReceipt} from '../receipts/parser.mjs';
+test('German produce is pantry food while fish is excluded and ripened cheese needs review',()=>{
+ const text='SAMPLE MARKET\nJALAPENOS 190G 1.29\nSILBERZWIEBELN 190G 0.99\nMAISKOELBCHEN 190G 1.19\nFRISCHMILCH 1L 0.95\nSKNOBLAUCH-PETERSILIE100G 1.99\nTHUNFISCH 195G 1.11\nBRATHERINGSFILET 200G 1.99\nLIMBURGER 200G 1.99\nTOTAL 11.50';
+ const rows=identifyReceiptItems(parseReceipt(text),[],text);
+ assert.deepEqual(rows.map(row=>row.section),['kitchen','kitchen','kitchen','kitchen','kitchen','','','']);
+ assert.deepEqual(rows.map(row=>Boolean(row.excludedFromPantry)),[false,false,false,false,false,true,true,false]);
+ assert.match(rows.at(-1).warning,/animal rennet/);
+});
 test('French product terms classify food and exclude explicit fish, crab and eggs',()=>{
  const names=['HLE OLIV BL0','JUS GRENADE 1L','MARRONS PERIGORD','CHX DE BRUXELLES','MINI-BOTTE ASPERGE',
   'DELIO SALADE CRABE','BIO FILET DE SAUMO','12 0EUFS FRAIS B20','ORKNEY CHEDDAR 200','DLL MEL NO1'];

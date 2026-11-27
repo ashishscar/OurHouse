@@ -3,6 +3,16 @@ import assert from 'node:assert/strict';
 import {parseReceipt,parseReceiptFields,pantryReceipt,expenseReceipt,auditReceipt} from '../receipts/parser.mjs';
 import {documentFrom} from '../receipts/document.mjs';
 
+test('a leading counted rate and a separately priced bottle deposit reconcile without changing stock',()=>{
+ const text=['SAMPLE MARKET','EUR','2 X 1.29','SAMPLE BEVERAGE 1x0.5L FL 2.58 A',
+  '2 X 0.08','MW-Pfand 0.08 EUR 0.16*A','SAMPLE JALAPENOS 190g 1.29 B','SUMME [4] 4.03'].join('\n');
+ const items=parseReceipt(text),audit=auditReceipt(text,items);
+ assert.deepEqual(items.map(item=>[item.qty,item.unit,item.amount,item.packCount]),[[1,'L','2.58',2],[190,'g','1.29',1]]);
+ assert.equal(audit.charges,'0.16');
+ assert.equal(audit.netSum,audit.total);
+ assert.deepEqual(audit.warnings,[]);
+});
+
 test('glued package sizes and a reconciled EUR/kg continuation keep stock separate from discounts',()=>{
  const text=['SAMPLE MARKET','Mild Butter250g 1,15','Mild Butter250g 1,15','Bananas Loose 0,85',
   '0,854 × 1,00 EUR/kg','Bread 1,99','-1,00','Rabatt','Mild Butter250g 1,15','SUMME 5,29'].join('\n');

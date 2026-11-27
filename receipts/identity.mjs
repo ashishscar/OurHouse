@@ -54,7 +54,7 @@ const verifiedFrenchChocolate=/\bEXCEL(?:LENCE)?[.\s]+NOIR[.\s]+FRAMBOI\w*/i;
 // https://www.kerrygold.de/produkte/gesalzene-butter-aus-irischer-weidemilch/
 // Product words in German, including common compound endings and OCR's oe/ae
 // transliterations. These suggest a section; they never repair the transcript.
-const germanFood=/\b(?:[o0]liven[oö0]l|hon[i1l]g|hummus|m[oö]hren|apfel|ananas|z[i1]mtschnecke|haferflocken|apfelsaft|kerrygold\s+gesalzen|sonn\w*blum\w*n(?:oel|öl)|erda?e?pfel|kartoffel\w*|naturjogh\w*|joghurt\w*|bananen?|knoblauch|butter(?:mild|sauer|gesalzen|ungesalzen)\w*|\w+brot|marmelade|zucker|mehl|reis)\b/i;
+const germanFood=/\b(?:[o0]liven[oö0]l|hon[i1l]g|hummus|m[oö]hren|apfel|ananas|z[i1]mtschnecke|haferflocken|apfelsaft|kerrygold\s+gesalzen|sonn\w*blum\w*n(?:oel|öl)|erda?e?pfel|kartoffel\w*|naturjogh\w*|joghurt\w*|bananen?|(?:[a-z]{1,2})?knoblauch|jalapenos?|silberz[wvu]iebeln|maisk(?:oelbchen|ölbchen)|ge(?:w|v)u?erz\w*|(?:frisch|fri[.]|voll|homo)?milch|butter(?:mild|sauer|gesalzen|ungesalzen)\w*|\w+brot|marmelade|zucker|mehl|reis)\b/i;
 const germanMeat=/\b(?:hackfleisch|rindfleisch|schweinefleisch|gefl[uü]gel|wurst|speck)\b/i;
 // The maker lists gelatin in this exact product. The till label alone cannot
 // reveal that ingredient, so keep this verified product out of vegetarian stock.
@@ -66,11 +66,11 @@ const excludedEggs=/\b(?:eggs?|eggnog|[o0]eufs?)\b/i;
 export function receiptSection(label){const expanded=words(label).join(' '),folded=expanded.normalize('NFD').replace(/\p{M}/gu,'');return household.test(label)||household.test(expanded)||/\bTAB\.?L[-\s]?VAISS|\bESSUIE[-\s]?TOUT\b|\bDEMAK\s*UP\s+DISQ\b/i.test(label)?'household':food.test(label)||food.test(expanded)||groundedFoodTypes.test(expanded)||frenchFood.test(folded)||frenchStaples.test(folded)||verifiedFrenchChocolate.test(label)||germanFood.test(label)||italianFood.test(label)||/\beggplants?\b/i.test(expanded)||/\btom\s+(?:diced|crushed|whole)\b|\b5050\b.*\bsweet\b.*\bsalty\b|\b(?:coke\s+diet|diet\s+coke)\b/i.test(expanded)?'kitchen':'';}
 // The abbreviated Beretta Praga sandwich is verified as a ham product by its
 // retailer listing: https://www.coopshop.it/product/tramezzino-praga-beretta140g
-const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light|thon|poisson|poulet|poule|jambon|porc|agneau|canard|saucisson|viande|sardines?|maquereaux?|boeuf|bœuf|vins?|champagnes?|cr[eé]mant|ci[do]re(?:bret)?|salam[i1]|schinkenw\S*|h[aä]hnchen\S*|pollo|suino|ga[mn]beretti|baccal[aà]|bresaola|mortad(?:ella)?|prosciutto|prosc\.?|salmone|luganeghe|birra|neipa|(?:double\s+)?ipa)\b|\b(?:FLTS?\s+DE\s+MAQ\b|AOC\s+RG\b)|\bsteak\s+hach[eé](?!\p{L})|\bberetta\s+tram\.?\s*praga\b/iu;
+const excludedFood=/\b(?:meat|beef|pork|chicken|drumsticks?|fish|seafood|shrimp|bacon|ham|sausage|beer|lager|wine|vodka|whisky|whiskey|coors\s+light|thon|thunfisch|(?:brat)?herings?\w*|poisson|poulet|poule|jambon|porc|agneau|canard|saucisson|viande|sardines?|maquereaux?|boeuf|bœuf|vins?|champagnes?|cr[eé]mant|ci[do]re(?:bret)?|salam[i1]|schinkenw\S*|h[aä]hnchen\S*|pollo|suino|ga[mn]beretti|baccal[aà]|bresaola|mortad(?:ella)?|prosciutto|prosc\.?|salmone|luganeghe|birra|neipa|(?:double\s+)?ipa)\b|\b(?:FLTS?\s+DE\s+MAQ\b|AOC\s+RG\b)|\bsteak\s+hach[eé](?!\p{L})|\bberetta\s+tram\.?\s*praga\b/iu;
 const frenchExcluded=/\b(?:crabe|saumo[n]?)\b/i;
 // An OCR label cannot establish whether a ripened cheese uses animal rennet.
 // Paneer is acid-set; otherwise leave cheese products unassigned for review.
-const uncertainRennet=/\b(?:cheese|fromage|from\.?past|morbier|fourme|brie|camembert|gruy[eè]re|gouda|cheddar|parmesan|feta|emmental|k[aä]se|padano|asiago|mozzarella|mozzarelle|robiola)\b/i;
+const uncertainRennet=/\b(?:cheese|fromage|from\.?past|morbier|fourme|brie|camembert|camem\w*|limburger\w*|gruy[eè]re|gouda|cheddar|parmesan|feta|emmental|k[aä]se\w*|kaese\w*|padano|asiago|mozzarella|mozzarelle|robiola)\b/i;
 // A gift card is a purchased expense but never stock, even at a grocery store.
 const nonStock=/\b(?:e?gift\s*cards?|doordash\s*\d+\s*x\s*\d+)\b/i;
 export function supportedName(proposed,receiptName){
