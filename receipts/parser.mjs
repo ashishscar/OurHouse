@@ -191,7 +191,7 @@ function repairInterleavedCountRows(lines,rawEvidence){
  }
 }
 function discountPrice(line){const m=line.match(/(?:-\s*[$₹£€]?\s*(\d+[.,]\d{2})|(\d+[.,]\d{2})\s*-)(?:\s*[A-Z*]{1,3})?\s*$/i);return m?amount(m[1]||m[2]):null;}
-function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|pfand|crv\s+sgl\s+(?:under\s+\d{2,4}z|\d{2,4}z\s+and\s+up))\s*$/i.test(priced.body)?priced.amount:null;}
+function separateDeposit(line){const priced=splitPrice(line);return priced&&/^\+?\s*(?:(?:bottle\s+)?deposit(?:\s+\d{1,3})?|(?:mw[-\s]*)?pfand(?:\s+\d+[.,]\d{2}\s*(?:EUR|€))?|crv\s+sgl\s+(?:under\s+\d{2,4}z|\d{2,4}z\s+and\s+up))\s*$/i.test(priced.body)?priced.amount:null;}
 function stripDamagedItemCode(name){
  if(/^\d{4}[\/.\-]\d{1,2}[\/.\-]\d{1,2}\b/.test(name))return name;
  const match=name.match(/^(?:\(\d{1,3}\)\s*)?([*#]?[\d():.\/!|#-]+[A-Z]?)\s+(?=[A-Z])/i);
@@ -429,7 +429,7 @@ export function parseReceipt(text){
   // candidate only across explicit discount metadata, then compare both nearby
   // product totals before assigning stock. Matching both is ambiguous.
   if(discount&&!positive){finishRate(undefined,false);beforeDiscount=bareDiscount.test(line)||/^(?:discount|savings|coupon)\b/i.test(line)?(last&&!last.unitPrice?last:beforeDiscount):null;pending=null;pendingDraft=null;last=null;continue;}
-  if(/^(?:[x×]\s+)?vente\b/i.test(line.replace(/^[*#\s]+/,''))||/^rabatt$/i.test(line)||noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
+  if(/^(?:[x×]\s+)?vente\b/i.test(line.replace(/^[*#\s]+/,''))||/^rabatt$/i.test(line)||/^(?:EUR|€|CAD|USD|GBP|INR)$/i.test(line)||noise.test(line.replace(/^[*\s]+/,''))||/^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}\s+\$?0[.,]00$/i.test(line)||/^(?:how\s+did\s+we\s+do\b|complete\s+our\s+.*\bsurvey\b|survey\.[\w.-]+|rules\s+and\s+regulations\b|see\s+contest\s+rules\b|\d+\s+of\s+\d+\s+[$₹£€]?\s*\d{2,})/i.test(line)||/^activated$/i.test(line)||/^(?:shop\s+card|remaining\s+balance|acct\b|purchase\b|\d+\s*pts\b|\d+\s+for\b|in[-\s]*st[a-z]{2,4}\s+offers\b.*\b\d+\s*pts\b)/i.test(line)||/\b(?:stamp\s+earn|bonus\s+points|you\s+price\s+matched\s*&\s*saved)\b/i.test(line)||/^[-=*_\s]+$/.test(line)||/^-\s*[$₹£€]?\s*\d/.test(line)){finishRate(undefined,false);pending=null;pendingDraft=null;last=null;beforeDiscount=null;continue;}
   const inlineRate=line.match(/^(.+?)\s+(\d{1,3})\s*[@x×]\s*(\d+[.,]\d{2})\s+(?:E?U[RF]|[≥:]UR)(?:\s+\(?[TD]\)?)?$/i);
   if(inlineRate&&validName(quantity(inlineRate[1]).name)){
    const row={...quantity(inlineRate[1]),amount:amount(inlineRate[3]),raw:line};applyRate(row,[null,inlineRate[2],undefined,inlineRate[3]]);add(row);last=row;pending=null;pendingDraft=null;beforeDiscount=null;continue;
@@ -497,6 +497,21 @@ export function parseReceipt(text){
    // label. Bind it forward only when its arithmetic reconciles and the
    // preceding purchase has a different amount.
    const nextLine=lines[lineIndex+1]||'',nextDraft=quantity(nextLine),rateTotal=num(rate[1])*num(rate[3]);
+   const nextPriced=splitPrice(nextLine);
+   // A separate refundable deposit has its own counted rate before its
+   // line total. It cannot update the preceding product's stock quantity.
+   if(separateDeposit(nextLine)&&Math.abs(Number(separateDeposit(nextLine))-rateTotal)<=.03){
+    finishRate(undefined,false);continue;
+   }
+   // Some tills put a counted unit rate before an already priced product.
+   // Attach it forward only when its multiplication matches that product,
+   // the label is a real purchase, and it cannot describe the prior item.
+   if(!pending&&!beforeDiscount&&nextPriced&&!separateDeposit(nextLine)&&
+    validName(quantity(nextPriced.body).name,true)&&
+    Math.abs(Number(nextPriced.amount)-rateTotal)<=.03&&
+    (!last?.amount||Math.abs(Number(last.amount)-rateTotal)>.03)){
+    finishRate(undefined,false);deferredRate={rate,line,previous:last};continue;
+   }
    if(priced&&!rate[2]&&!pending&&/^\d{3,14}\s+[A-Z]/i.test(nextLine)&&Math.abs(Number(priced.amount)-rateTotal)<=.03&&(!last||Math.abs(Number(last.amount)-rateTotal)>.03)&&!splitPrice(nextLine)&&validName(nextDraft.name)){
     const nextRow={...nextDraft,amount:priced.amount,raw:line+'\n'+nextLine};applyRate(nextRow,rate);add(nextRow);last=nextRow;pending=null;pendingDraft=null;beforeDiscount=null;consumed.add(lineIndex+1);continue;
    }
