@@ -190,7 +190,7 @@ async function receiptAISection(photo,job,onProgress){
 }
 openReceiptScan=async event=>{
  const file=event.target.files?.[0];event.target.value='';if(!file)return;if(window.OurHouseMaintenance?.allows('receipts')===false)return showToast('Receipt scanning is temporarily protected. Add stock manually until the health check passes.',true);if(!canEdit())return showToast('Member access is required to add stock.',true);
- const actor=myUid,house=siteId,useAI=await chooseReceiptAI();if(actor!==myUid||house!==siteId||!canEdit())return;cancelFamilyReceipt(true);const job={actor,house,ai:useAI,controller:new AbortController()};familyReceiptJob=job;let worker,prepared,metricFailed=false;const metricStart=performance.now();
+ const actor=myUid,house=siteId,useAI=await chooseReceiptAI();if(actor!==myUid||house!==siteId||!canEdit())return;cancelFamilyReceipt(true);const job={actor,house,ai:useAI,controller:new AbortController()};familyReceiptJob=job;let prepared,metricFailed=false;const metricStart=performance.now();
  const current=()=>familyReceiptJob===job&&!job.controller.signal.aborted&&myUid===job.actor&&siteId===job.house&&canEdit()&&$('sheet-receiptreading').getAttribute('aria-hidden')!=='true';
  openSheet('receiptreading');$('receiptReadProgress').textContent='Starting your receipt reader…';$('receiptReadPrivacy').textContent=job.ai?'Your receipt sections will be processed by Cloudflare AI. You’ll review every item before adding stock.':'Your photo stays on this device. Long receipts are read in overlapping sections. You’ll review every item before adding stock.';
  try{
@@ -200,6 +200,29 @@ openReceiptScan=async event=>{
   else {
    prepared=await OurHouseReceipts.prepare(file,job.controller.signal,{ai:job.ai});if(!current())return;
    let pages=[],fallbackWarning='';
+   const readLocally=async indices=>{
+    await ReceiptScanner.deadline(loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'),16000,job.controller.signal);
+    const cores=navigator.hardwareConcurrency||2,memory=navigator.deviceMemory;
+    const concurrency=indices.length>=4&&cores>=4&&(memory===undefined||memory>=4)?2:1;
+    return OurHouseReceipts.readLocalSections(indices,{
+     signal:job.controller.signal,concurrency,
+     createWorker:async()=>{
+      const creation=Tesseract.createWorker('eng');creation.then(worker=>{if(!current())void worker.terminate();}).catch(()=>{});
+      const worker=await ReceiptScanner.deadline(creation,20000,job.controller.signal);
+      if(!current()){await worker.terminate();throw Error('Scan cancelled.');}
+      try{if(worker.setParameters)await worker.setParameters({preserve_interword_spaces:'1',tessedit_pageseg_mode:'4',user_defined_dpi:'300'});}catch(error){await worker.terminate();throw error;}
+      return worker;
+     },
+     readPage:async(worker,index)=>{
+      if(!current())throw Error('Scan cancelled.');
+      const photo=await prepared.page(index);
+      const result=await ReceiptScanner.deadline(worker.recognize(photo,{}, {text:true,blocks:true}),45000,job.controller.signal,()=>void worker.terminate());
+      if(!current())throw Error('Scan cancelled.');
+      return result.data;
+     },
+     onProgress:(index,completed,total)=>{if(current())$('receiptReadProgress').textContent='Reading section '+(index+1)+' of '+prepared.plan.sections.length+' on this device… '+completed+' of '+total+' complete';}
+    });
+   };
    if(job.ai){
     let cursor=0,completed=0;pages=new Array(prepared.plan.sections.length);
     if(pages.length<=24){await Promise.all(Array.from({length:Math.min(4,pages.length)},async()=>{while(cursor<pages.length&&current()){
@@ -209,28 +232,20 @@ openReceiptScan=async event=>{
     const missing=pages.map((page,i)=>page?null:i).filter(i=>i!==null);
     if(missing.length){
      fallbackWarning=missing.length+' of '+pages.length+' receipt sections needed on-device reading. Completed AI sections were kept. Compare the whole receipt before adding products.';
-     await ReceiptScanner.deadline(loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'),16000,job.controller.signal);
-     const creation=Tesseract.createWorker('eng');creation.then(w=>{if(!current())void w.terminate();}).catch(()=>{});worker=await ReceiptScanner.deadline(creation,20000,job.controller.signal);if(!current())return;
-     if(worker.setParameters)await worker.setParameters({preserve_interword_spaces:'1',tessedit_pageseg_mode:'4',user_defined_dpi:'300'});
-     for(const i of missing){if(!current())return;$('receiptReadProgress').textContent='Reading section '+(i+1)+' of '+pages.length+' on this device…';const photo=await prepared.page(i),result=await ReceiptScanner.deadline(worker.recognize(photo,{}, {text:true,blocks:true}),45000,job.controller.signal,()=>void worker?.terminate());if(!current())return;const section=prepared.plan.sections[i];pages[i]={lines:OurHouseReceipts.receiptLines([{data:result.data,section}]).map(line=>line.text),section,native:true};}
+     const read=await readLocally(missing);if(!current())return;
+     for(let n=0;n<missing.length;n++){const i=missing[n],section=prepared.plan.sections[i];pages[i]={lines:OurHouseReceipts.receiptLines([{data:read[n],section}]).map(line=>line.text),section,native:true};}
     }
    }
    if(!job.ai){
-    await ReceiptScanner.deadline(loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'),16000,job.controller.signal);
-    const creation=Tesseract.createWorker('eng');creation.then(w=>{if(!current())void w.terminate();}).catch(()=>{});worker=await ReceiptScanner.deadline(creation,20000,job.controller.signal);if(!current())return;
-    if(worker.setParameters)await worker.setParameters({preserve_interword_spaces:'1',tessedit_pageseg_mode:'4',user_defined_dpi:'300'});
-    pages=[];
-    for(let i=0;i<prepared.plan.sections.length;i++){
-     if(!current())return;$('receiptReadProgress').textContent='Reading section '+(i+1)+' of '+prepared.plan.sections.length+'…';
-     const photo=await prepared.page(i),result=await ReceiptScanner.deadline(worker.recognize(photo,{}, {text:true,blocks:true}),45000,job.controller.signal,()=>void worker?.terminate());if(!current())return;pages.push({data:result.data,section:prepared.plan.sections[i]});
-    }
+    const indices=prepared.plan.sections.map((_,i)=>i),read=await readLocally(indices);if(!current())return;
+    pages=indices.map((i,n)=>({data:read[n],section:prepared.plan.sections[i]}));
    }
    if(!current())return;document=OurHouseReceipts.documentFrom(pages,{name:file.name||'receipt',mime:file.type||'image/jpeg',fingerprint:importId,...prepared.source},{ai:job.ai,elapsedMs:Math.round(performance.now()-metricStart)});if(fallbackWarning)document.warnings.unshift(fallbackWarning);
    familyReceiptCache.set(cacheKey,document);while(familyReceiptCache.size>3)familyReceiptCache.delete(familyReceiptCache.keys().next().value);
   }
   if(!current())return;const occurrences=new Map();scanReview=await Promise.all(document.items.map(async item=>{const source=JSON.stringify([normName(item.ocrName||item.receiptName||item.name),item.qty,item.unit,item.amount||'',item.itemNumber||'']),occurrence=(occurrences.get(source)||0)+1;occurrences.set(source,occurrence);const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(importId+':'+source+':'+occurrence));return {...item,receiptLineId:Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('')};}));if(!current())return;familyReceiptContext={actor:job.actor,house:job.house,importId,file,document,photoUrl:URL.createObjectURL(file)};closeAllSheets();openScanReviewSheet();
  }catch(e){if(current()){metricFailed=true;closeAllSheets();void window.OurHouseMaintenance?.report('RECEIPT_SCAN');showToast(e.message||'Receipt could not be read. No stock changed.',true);}}
- finally{prepared?.release();if(familyReceiptJob===job)window.OurHouseMetrics?.measure('RECEIPT_SCAN',performance.now()-metricStart,metricFailed);try{await worker?.terminate();}catch{}if(familyReceiptJob===job)familyReceiptJob=null;}
+ finally{prepared?.release();if(familyReceiptJob===job)window.OurHouseMetrics?.measure('RECEIPT_SCAN',performance.now()-metricStart,metricFailed);if(familyReceiptJob===job)familyReceiptJob=null;}
 };
 function openReceiptTextView(){const ctx=familyReceiptContext;if(!ctx||ctx.actor!==myUid||ctx.house!==siteId||!ctx.photoUrl)return;const view=$('receiptTextView');$('receiptTextPhoto').src=ctx.photoUrl;$('receiptTextOriginal').href=ctx.photoUrl;$('receiptTextTranscript').textContent=ctx.document?.ocr?.text||'No text was recognized. You can still inspect the photo.';view.showModal();}
 openScanReviewSheet=()=>{if(!scanReview)return;const ctx=familyReceiptContext,doc=ctx?.document;$('receiptOriginalQuick').href=ctx.photoUrl;$('scanReviewIntro').textContent=scanReview.length+' products found. Prices are separate from stock. Check the photo, correct quantities, and select what to add. Nothing changes until you confirm.'+(Object.values(DB.pantry||{}).some(p=>p._receiptOps?.[ctx?.importId])?' Some products from this photo were imported previously. Select only missing products; check any names that changed.':'');
